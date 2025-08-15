@@ -9,7 +9,7 @@ from flutter_setup.config import Config
 class TestConfig:
     """Test cases for Config class."""
 
-    def test_valid_config_creation(self):
+    def test_valid_config_creation(self) -> None:
         """Test creating a valid configuration."""
         config = Config(
             project_name="TestApp",
@@ -36,7 +36,7 @@ class TestConfig:
         assert config.dry_run is True
         assert config.verbose is True
 
-    def test_package_name_sanitization(self):
+    def test_package_name_sanitization(self) -> None:
         """Test package name sanitization."""
         config = Config(
             project_name="My Test App!",
@@ -54,7 +54,7 @@ class TestConfig:
 
         assert config.package_name == "my_test_app"
 
-    def test_platforms_csv(self):
+    def test_platforms_csv(self) -> None:
         """Test platforms CSV generation."""
         config = Config(
             project_name="TestApp",
@@ -72,7 +72,7 @@ class TestConfig:
 
         assert config.platforms_csv == "ios,android,web"
 
-    def test_project_path(self):
+    def test_project_path(self) -> None:
         """Test project path generation."""
         config = Config(
             project_name="TestApp",
@@ -90,7 +90,7 @@ class TestConfig:
 
         assert config.project_path == Path("/tmp/TestApp")
 
-    def test_invalid_project_name(self):
+    def test_invalid_project_name(self) -> None:
         """Test validation of empty project name."""
         with pytest.raises(ValueError, match="Project name cannot be empty"):
             Config(
@@ -107,7 +107,7 @@ class TestConfig:
                 verbose=False,
             )
 
-    def test_invalid_platforms(self):
+    def test_invalid_platforms(self) -> None:
         """Test validation of invalid platforms."""
         with pytest.raises(ValueError, match="Invalid platform: invalid"):
             Config(
@@ -124,7 +124,7 @@ class TestConfig:
                 verbose=False,
             )
 
-    def test_empty_platforms(self):
+    def test_empty_platforms(self) -> None:
         """Test validation of empty platforms list."""
         with pytest.raises(ValueError, match="At least one platform must be specified"):
             Config(
