@@ -1,4 +1,4 @@
-name: Quality checks
+name: Testing
 
 on:
   pull_request:
@@ -10,45 +10,10 @@ concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  pull-requests: write
+
 jobs:
-  lint-typecheck:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12"]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        run: pip install uv
-
-      - name: Install dependencies with uv
-        run: |
-          # Install project dependencies (if pyproject.toml is present)
-          if [ -f pyproject.toml ]; then
-            uv pip install -e . --system
-          fi
-          # Install dev tools without adding to project
-          uv pip install black ruff mypy --system
-
-      - name: Black (check only)
-        run: uv run black --check --diff .
-
-      - name: Ruff (lint)
-        run: uv run ruff check .
-
-      - name: mypy (type check)
-        run: uv run mypy .
-
   test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
