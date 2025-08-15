@@ -47,10 +47,4 @@ jobs:
         run: uv run ruff check .
 
       - name: mypy (type check)
-        env:
-          MYPY_CACHE_DIR: .mypy_cache
-        run: |
-          if [ -d src ]; then
-            uv run mypy src
-          else
-            uv run mypy .
+        run: uv run mypy .
