@@ -1,0 +1,90 @@
+name: Quality checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies with uv
+        run: |
+          # Install project dependencies (if pyproject.toml is present)
+          if [ -f pyproject.toml ]; then
+            uv pip install -e . --system
+          fi
+          # Install dev tools without adding to project
+          uv pip install black ruff mypy --system
+
+      - name: Black (check only)
+        run: uv run black --check --diff .
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: mypy (type check)
+        run: uv run mypy .
+
+  test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies with uv
+        run: |
+          # Install project dependencies (if pyproject.toml is present)
+          if [ -f pyproject.toml ]; then
+            uv pip install -e . --system
+          fi
+          # Install test dependencies
+          uv pip install pytest pytest-cov --system
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=flutter_setup --cov-report=xml
+
+      - name: Report coverage to PR
+        if: github.event_name == 'pull_request'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          fail_ci_if_error: true
