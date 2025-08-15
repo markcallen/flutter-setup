@@ -211,7 +211,7 @@ A comprehensive bash script that automates the complete Flutter development envi
 ## 6. Technical Specifications
 
 ### 6.1 Architecture
-- **Language:** Bash script with shell scripting best practices
+- **Language:** Python command line interface 
 - **Dependencies:** Git, Homebrew, Xcode Command Line Tools
 - **Target Platform:** macOS (primary), with potential for Linux/Windows expansion
 
@@ -224,6 +224,10 @@ A comprehensive bash script that automates the complete Flutter development envi
 - **SR-001:** Must not require elevated privileges for normal operation
 - **SR-002:** Must validate all downloaded content and dependencies
 - **SR-003:** Must not expose sensitive information in logs or output
+
+### 6.4 Deployment
+- **Packaging** Deploys as a python package that developers can download from github
+- **CI/CD** has it own CI/CD pipline to build and deploy to github
 
 ---
 
