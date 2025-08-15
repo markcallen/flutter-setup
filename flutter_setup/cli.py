@@ -9,7 +9,14 @@ from rich.console import Console
 from rich.panel import Panel
 
 from .core import FlutterSetup
-from .config import Config
+from .config import (
+    Config,
+    FlutterChannel,
+    TemplateType,
+    IosLanguage,
+    AndroidLanguage,
+    UpdateMode,
+)
 from .exceptions import FlutterSetupError
 
 console = Console()
@@ -81,14 +88,14 @@ def print_banner() -> None:
 )
 def main(
     project_name: str,
-    platforms: tuple,
+    platforms: tuple[str, ...],
     org: str,
-    channel: str,
+    channel: FlutterChannel,
     dir: str,
-    template: str,
-    ios_language: str,
-    android_language: str,
-    flutter_update: str,
+    template: TemplateType,
+    ios_language: IosLanguage,
+    android_language: AndroidLanguage,
+    flutter_update: UpdateMode,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -138,4 +145,5 @@ def main(
 
 
 if __name__ == "__main__":
+    # Click handles argument parsing, so we can call main() without arguments
     main()

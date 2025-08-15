@@ -1,9 +1,9 @@
 # Features & Improvements Roadmap
 ## Flutter Development Environment Setup Script
 
-**Document Version:** 1.0.0  
-**Last Updated:** December 2024  
-**Status:** Planning Phase  
+**Document Version:** 1.0.0
+**Last Updated:** December 2024
+**Status:** Planning Phase
 
 ---
 

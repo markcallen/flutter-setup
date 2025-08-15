@@ -5,7 +5,7 @@ globs: **/*.py, src/**/*.py, tests/**/*.py
 ---
 
 ## Global
-- This is a python 3.12 project.  
+- This is a python 3.12 project.
 
 ## Packages
 - Use uv for package management and running of everything.

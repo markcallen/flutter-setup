@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
 ## Flutter Development Environment Setup Script
 
-**Version:** 1.0.0  
+**Version:** 1.0.0
 **Date:** Auguest 2025
-**Product Owner:** Development Team  
-**Document Owner:** Engineering Team  
+**Product Owner:** Development Team
+**Document Owner:** Engineering Team
 
 ---
 
@@ -211,7 +211,7 @@ A comprehensive bash script that automates the complete Flutter development envi
 ## 6. Technical Specifications
 
 ### 6.1 Architecture
-- **Language:** Python command line interface 
+- **Language:** Python command line interface
 - **Dependencies:** Git, Homebrew, Xcode Command Line Tools
 - **Target Platform:** macOS (primary), with potential for Linux/Windows expansion
 
