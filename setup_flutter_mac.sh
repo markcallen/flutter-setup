@@ -39,17 +39,6 @@ sanitize_pkg(){
 }
 run(){ if [[ "$DRY_RUN" -eq 1 ]]; then echo "[dry-run] $*"; else eval "$*"; fi; }
 
-dedupe_preserve_order(){
-  # prints each unique arg once, preserving order
-  local out=() p q found
-  for p in "$@"; do
-    found=0
-    for q in "${out[@]}"; do [[ "$p" == "$q" ]] && found=1 && break; done
-    [[ $found -eq 0 ]] && out+=("$p")
-  done
-  printf "%s\n" "${out[@]}"
-}
-
 join_csv(){
   local out="" first=1 x
   for x in "$@"; do
@@ -108,20 +97,15 @@ done
 case "$FLUTTER_UPDATE_MODE" in reset|reclone|skip) ;; *) die "Invalid --flutter-update. Use reset|reclone|skip." ;; esac
 
 RAW_PLATFORMS=("$@")
-# resolve + validate
-declare -a CLEAN_PLATFORMS=()
+# resolve + validate + dedupe (preserve order)
+DEDUP_PLATFORMS=()
 for rp in "${RAW_PLATFORMS[@]}"; do
   rp="${rp// /}"; [[ -z "$rp" ]] && continue
   resolved="$(resolve_platform "$rp")"
   is_supported "$resolved" || { warn "Unsupported platform: '$rp'"; echo "Allowed: ${SUPPORTED_PLATFORMS[*]}"; exit 2; }
-  CLEAN_PLATFORMS+=("$resolved")
-done
-# de-duplicate while preserving order
-DEDUP_PLATFORMS=()
-for p in "${CLEAN_PLATFORMS[@]}"; do
-  found=0
-  for q in "${DEDUP_PLATFORMS[@]}"; do [[ "$p" == "$q" ]] && found=1 && break; done
-  [[ $found -eq 0 ]] && DEDUP_PLATFORMS+=("$p")
+  # dedupe
+  already=0; for q in "${DEDUP_PLATFORMS[@]}"; do [[ "$q" == "$resolved" ]] && already=1 && break; done
+  [[ $already -eq 0 ]] && DEDUP_PLATFORMS+=("$resolved")
 done
 
 PLAT_CSV="$(join_csv "${DEDUP_PLATFORMS[@]}")"
@@ -142,15 +126,9 @@ xcode-select -p >/dev/null 2>&1 || run "xcode-select --install || true"
 
 if ! need_cmd brew; then
   run 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-  # Add brew to PATH for Apple Silicon
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  fi
+  if [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)"; fi
 else
-  # Ensure shellenv in current session if available
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)" || true
-  fi
+  if [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)" || true; fi
 fi
 run "brew list git >/dev/null 2>&1 || brew install git"
 run "brew list cocoapods >/dev/null 2>&1 || brew install cocoapods"
@@ -173,10 +151,9 @@ ensure_flutter() {
   fi
 
   # Existing repo: fetch & check status
-  i "Updating Flutter ($channel) at $root…"
+  i "Updating Flutter ($channel) at $root..."
   run "(cd \"$root\" && git remote set-url origin https://github.com/flutter/flutter.git >/dev/null 2>&1 || true)"
   run "(cd \"$root\" && git fetch origin --prune)"
-  # ensure we’re on the channel branch and tracking origin
   if ! (cd "$root" && git checkout "$channel" >/dev/null 2>&1); then
     run "(cd \"$root\" && git checkout -b \"$channel\" \"origin/$channel\")"
   fi
@@ -194,12 +171,9 @@ ensure_flutter() {
   fi
 
   b "Flutter repo has diverged from origin/$channel."
-  # Show how far each side is ahead (no awk; parse with shell)
-  local counts
-  counts="$(cd "$root" && git rev-list --left-right --count "origin/$channel...$channel" 2>/dev/null || echo "0 0")"
+  local counts; counts="$(cd "$root" && git rev-list --left-right --count "origin/$channel...$channel" 2>/dev/null || echo "0 0")"
   local left_ahead right_ahead
-  left_ahead="${counts%% *}"
-  right_ahead="${counts##* }"
+  left_ahead="${counts%% *}"; right_ahead="${counts##* }"
   echo "Local ahead by: ${right_ahead:-0}; origin ahead by: ${left_ahead:-0}"
 
   read -rp "Hard reset Flutter to origin/$channel now? This discards local changes. [y/N] " ans
@@ -210,7 +184,6 @@ ensure_flutter() {
     warn "Skipped reset. You can re-run with: --flutter-update reclone  (or fix manually)."
   fi
 }
-
 ensure_flutter
 
 # Ensure PATH (persist + current shell)
@@ -224,8 +197,6 @@ if [[ -n "$ISSUES" ]]; then
   warn "flutter doctor found issues:"
   echo "$ISSUES"
 fi
-
-# Offer to run android-licenses if needed (interactive; user accepts)
 if echo "$DOCTOR_OUT" | grep -q "Some Android licenses not accepted"; then
   b "Android licenses not accepted."
   read -rp "Run 'flutter doctor --android-licenses' now? [y/N] " ans
@@ -248,14 +219,14 @@ for p in "${DEDUP_PLATFORMS[@]}"; do
   esac
 done
 
-# Extra Android deps if requested
+# Android extras if requested
 for p in "${DEDUP_PLATFORMS[@]}"; do [[ "$p" == "android" ]] && {
   run "brew list --cask temurin >/dev/null 2>&1 || brew install --cask temurin"
   run "brew list --cask android-commandlinetools >/dev/null 2>&1 || brew install --cask android-commandlinetools"
   break
 }; done
 
-# CocoaPods spec update for iOS
+# CocoaPods spec update if iOS requested
 for p in "${DEDUP_PLATFORMS[@]}"; do [[ "$p" == "ios" ]] && { run "pod repo update || true"; break; }; done
 
 # ===== create project (explicit output path) =====
@@ -270,26 +241,216 @@ else
     --platforms="$PLAT_CSV"
     --template "$TEMPLATE"
   )
-  # Only plugin supports language flags
   if [[ "$TEMPLATE" == "plugin" ]]; then
     CREATE_CMD+=(--ios-language "$IOS_LANG" --android-language "$ANDROID_LANG")
   fi
   CREATE_CMD+=("$OUTPUT_PATH")
 
-  i "Creating Flutter project at $OUTPUT_PATH…"
+  i "Creating Flutter project at $OUTPUT_PATH..."
   run "${CREATE_CMD[@]}"
   ok "Project created at: $OUTPUT_PATH"
 fi
+
+# ===== Cursor-friendly bootstrapping =====
+app_post_bootstrap() {
+  local path="$1" pkg="$2"
+  i "Bootstrapping development & testing helpers…"
+
+  # .vscode (Cursor/VSCode config)
+  run "mkdir -p \"$path/.vscode\""
+  cat > "$path/.vscode/settings.json" <<'JSON'
+{
+  "dart.flutterHotReloadOnSave": "all",
+  "dart.lineLength": 100,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "Dart-Code.dart-code",
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true
+  }
+}
+JSON
+  cat > "$path/.vscode/launch.json" <<'JSON'
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter Debug",
+      "request": "launch",
+      "type": "dart"
+    }
+  ]
+}
+JSON
+
+  # Makefile
+  cat > "$path/Makefile" <<'MAKE'
+run:
+	flutter run -d chrome
+
+run_ios:
+	flutter run -d ios
+
+run_android:
+	flutter run -d android
+
+analyze:
+	flutter analyze
+
+test:
+	flutter test
+
+integration:
+	flutter test integration_test
+MAKE
+
+  # Tests layout
+  run "mkdir -p \"$path/test/unit\" \"$path/test/widget\" \"$path/integration_test\""
+
+  # Unit test
+  cat > "$path/test/unit/sanity_test.dart" <<'DART'
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('sanity check', () {
+    expect(1 + 1, equals(2));
+  });
+}
+DART
+
+  # Widget test (imports app)
+  cat > "$path/test/widget/app_widget_test.dart" <<DART
+import 'package:flutter_test/flutter_test.dart';
+import 'package:$pkg/main.dart';
+
+void main() {
+  testWidgets('App loads without errors', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    expect(find.byType(MyApp), findsOneWidget);
+  });
+}
+DART
+
+  # Integration test
+  cat > "$path/integration_test/app_test.dart" <<DART
+import 'package:integration_test/integration_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:$pkg/main.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('home page renders', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    expect(find.byType(MyApp), findsOneWidget);
+  });
+}
+DART
+
+  # Lints & analysis
+  cat > "$path/analysis_options.yaml" <<'YAML'
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    avoid_print: false
+    prefer_const_constructors: true
+YAML
+
+  # GitHub Actions CI
+  run "mkdir -p \"$path/.github/workflows\""
+  cat > "$path/.github/workflows/flutter-ci.yml" <<'YAML'
+name: Flutter CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+YAML
+
+  # .env support via flutter_dotenv
+  # Add deps using flutter tooling (avoids manual YAML edits):
+  (cd "$path" && flutter pub add flutter_dotenv >/dev/null 2>&1 || true)
+  (cd "$path" && flutter pub add --dev flutter_lints integration_test >/dev/null 2>&1 || true)
+
+  # Create a sample .env (not committed if you add to .gitignore)
+  cat > "$path/.env" <<'ENV'
+# Example environment variables
+API_URL=https://api.example.com
+ENV
+
+  # Patch lib/main.dart to load .env (safe-ish sed edits)
+  if [[ -f "$path/lib/main.dart" ]] && ! grep -q "flutter_dotenv" "$path/lib/main.dart"; then
+    # insert import after first 'import 'package:flutter' line or at top
+    if grep -n "package:flutter/" "$path/lib/main.dart" >/dev/null 2>&1; then
+      line_no="$(grep -n "package:flutter/" "$path/lib/main.dart" | head -n1 | cut -d: -f1)"
+      awk -v n="$line_no" 'NR==n{print; print "import '\''package:flutter_dotenv/flutter_dotenv.dart'\'';"; next}1' "$path/lib/main.dart" > "$path/lib/main.tmp.dart" && mv "$path/lib/main.tmp.dart" "$path/lib/main.dart"
+    else
+      { echo "import 'package:flutter_dotenv/flutter_dotenv.dart';"; cat "$path/lib/main.dart"; } > "$path/lib/main.tmp.dart" && mv "$path/lib/main.tmp.dart" "$path/lib/main.dart"
+    fi
+    # make main async and load dotenv if we find 'void main() {'
+    if grep -q "^void main()" "$path/lib/main.dart"; then
+      sed -i '' 's/^void main() {/Future<void> main() async {/' "$path/lib/main.dart"
+      # insert dotenv.load just after the opening brace
+      sed -i '' '0,/Future<void> main() async {/{/Future<void> main() async {/a\
+  await dotenv.load(fileName: ".env");
+}' "$path/lib/main.dart"
+    fi
+    # If the app uses runApp(MyApp()) elsewhere, leave as-is.
+  fi
+
+  # README quickstart
+  cat > "$path/README.md" <<MD
+# ${PROJECT_DIR_NAME}
+
+Flutter app scaffolded for Cursor.
+
+## Quickstart
+\`\`\`bash
+flutter pub get
+make run            # runs on Chrome by default
+\`\`\`
+
+## Testing
+\`\`\`bash
+make test           # unit + widget tests
+make integration    # integration_test/
+\`\`\`
+
+## Linting
+\`\`\`bash
+make analyze
+\`\`\`
+
+## Env vars
+Edit \`.env\` and access with \`dotenv.env['KEY']\` after startup.
+MD
+
+  # Format everything (best effort)
+  (cd "$path" && dart format . >/dev/null 2>&1 || true)
+}
+app_post_bootstrap "$OUTPUT_PATH" "$PKG_NAME"
 
 cat <<'NEXT'
 Next steps:
   source ~/.zprofile
   cd "<OUT_DIR>/<PROJECT_DIR_NAME>"
-  flutter run -d macos   # macOS desktop
-  flutter run -d chrome  # Web
-  flutter run -d ios     # iOS Simulator
-  flutter run -d android # Android Emulator
+  make run           # or: flutter run -d chrome / ios / android
+  make test          # run tests
+  make analyze       # check lints
 
-If flutter doctor listed issues, fix them (Android SDK, Xcode signing, licenses) and re-run.
+Open in Cursor and hit F5 ("Flutter Debug") to start debugging.
 NEXT
 
