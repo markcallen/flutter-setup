@@ -9,11 +9,11 @@
 
 ## 🚀 Immediate Improvements (High Priority)
 
-### **Modularize the Script**
-- Recreate the script in python using uv
+### **Modularize the Script** ✅
+- ~~Recreate the script in python using uv~~ (Completed)
 
 ### **Add Configuration Management**
-- Create a `config.yaml` file for user preferences
+- Create a `config.yaml` file for user preferences in the XDG Base Directory Specification's user data directory.
 - Support environment variables for customization
 - Allow users to save and reuse configurations
 
