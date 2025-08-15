@@ -95,12 +95,12 @@ def main(
     """Set up a complete Flutter development environment."""
     try:
         print_banner()
-        
+
         # Validate platforms
         if not platforms:
             console.print("[red]Error: At least one platform is required[/red]")
             sys.exit(1)
-        
+
         # Create configuration
         config = Config(
             project_name=project_name,
@@ -115,13 +115,13 @@ def main(
             dry_run=dry_run,
             verbose=verbose,
         )
-        
+
         # Create and run setup
         setup = FlutterSetup(config)
         setup.run()
-        
+
         console.print("\n[green]✅ Flutter setup completed successfully![/green]")
-        
+
     except FlutterSetupError as e:
         console.print(f"[red]❌ Setup failed: {e}[/red]")
         if verbose:

@@ -8,7 +8,7 @@ from flutter_setup.config import Config
 
 class TestConfig:
     """Test cases for Config class."""
-    
+
     def test_valid_config_creation(self):
         """Test creating a valid configuration."""
         config = Config(
@@ -24,7 +24,7 @@ class TestConfig:
             dry_run=True,
             verbose=True,
         )
-        
+
         assert config.project_name == "TestApp"
         assert config.platforms == ["ios", "android", "web"]
         assert config.org == "com.test"
@@ -35,7 +35,7 @@ class TestConfig:
         assert config.flutter_update_mode == "reset"
         assert config.dry_run is True
         assert config.verbose is True
-    
+
     def test_package_name_sanitization(self):
         """Test package name sanitization."""
         config = Config(
@@ -51,9 +51,9 @@ class TestConfig:
             dry_run=False,
             verbose=False,
         )
-        
+
         assert config.package_name == "my_test_app"
-    
+
     def test_platforms_csv(self):
         """Test platforms CSV generation."""
         config = Config(
@@ -69,9 +69,9 @@ class TestConfig:
             dry_run=False,
             verbose=False,
         )
-        
+
         assert config.platforms_csv == "ios,android,web"
-    
+
     def test_project_path(self):
         """Test project path generation."""
         config = Config(
@@ -87,9 +87,9 @@ class TestConfig:
             dry_run=False,
             verbose=False,
         )
-        
+
         assert config.project_path == Path("/tmp/TestApp")
-    
+
     def test_invalid_project_name(self):
         """Test validation of empty project name."""
         with pytest.raises(ValueError, match="Project name cannot be empty"):
@@ -106,7 +106,7 @@ class TestConfig:
                 dry_run=False,
                 verbose=False,
             )
-    
+
     def test_invalid_platforms(self):
         """Test validation of invalid platforms."""
         with pytest.raises(ValueError, match="Invalid platform: invalid"):
@@ -123,7 +123,7 @@ class TestConfig:
                 dry_run=False,
                 verbose=False,
             )
-    
+
     def test_empty_platforms(self):
         """Test validation of empty platforms list."""
         with pytest.raises(ValueError, match="At least one platform must be specified"):
