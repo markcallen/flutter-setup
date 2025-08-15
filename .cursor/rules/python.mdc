@@ -1,0 +1,26 @@
+---
+alwaysApply: false
+description: Python best practices and patterns for modern software development
+globs: **/*.py, src/**/*.py, tests/**/*.py
+---
+
+## Global
+- This is a python 3.12 project.  
+
+## Packages
+- Use uv for package management and running of everything.
+
+## Formatting
+- Use black for formatting
+
+## Linting
+- ruff for linting
+- mypy for type validation
+
+## Testing
+- Use pytest for testing
+- Write tests for all routes
+- Use pytest-cov for coverage
+- Implement proper fixtures
+- Use proper mocking with pytest-mock
+- Test all error scenarios
