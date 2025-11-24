@@ -2,7 +2,7 @@
 ## Flutter Development Environment Setup Script
 
 **Version:** 1.0.0
-**Date:** Auguest 2025
+**Date:** August 2025
 **Product Owner:** Development Team
 **Document Owner:** Engineering Team
 
@@ -137,6 +137,66 @@ A comprehensive bash script that automates the complete Flutter development envi
   - Customize linting rules
   - Enable format-on-save
 
+#### 3.2.4 Configuration Management
+**FR-012:** User Configuration File
+- **Acceptance Criteria:**
+  - Create `config.yaml` file in XDG Base Directory Specification's user data directory
+  - Support configuration for Flutter channel, root directory, update modes
+  - Store default project settings (organization, template, languages)
+  - Allow environment variable overrides
+  - Enable configuration save and reuse
+  - Support configuration file format as specified in Technical Specifications
+
+**FR-013:** System Requirements Validation
+- **Acceptance Criteria:**
+  - Validate system requirements before starting setup
+  - Check macOS version compatibility
+  - Verify available disk space
+  - Validate network connectivity
+  - Check for required permissions
+
+#### 3.2.5 Error Handling & Recovery
+**FR-014:** Advanced Error Handling
+- **Acceptance Criteria:**
+  - Implement rollback functionality for failed installations
+  - Add retry mechanisms for network operations (with exponential backoff)
+  - Create detailed error logs with troubleshooting steps
+  - Provide actionable error messages with next steps
+  - Support recovery from partial installations
+  - Log errors to file in user data directory
+
+**FR-015:** Health Checks
+- **Acceptance Criteria:**
+  - Verify Flutter SDK installation integrity
+  - Validate installed dependencies
+  - Check Flutter doctor status
+  - Provide health check reports
+
+#### 3.2.6 User Experience Enhancements
+**FR-016:** Interactive Setup Wizard
+- **Acceptance Criteria:**
+  - Add `--interactive` mode with guided setup
+  - Provide progress bars with estimated completion times
+  - Offer contextual help text for each option
+  - Add confirmation prompts for destructive operations
+  - Support non-interactive mode for automation
+
+**FR-017:** Visual Feedback
+- **Acceptance Criteria:**
+  - Implement colored output with proper contrast
+  - Add emoji indicators for different operation types (success, error, info, warning)
+  - Show real-time progress updates
+  - Provide summary reports after completion
+  - Support color-blind friendly output modes
+
+**FR-018:** Enhanced Dry-Run Mode
+- **Acceptance Criteria:**
+  - Show exactly what will be installed/configured
+  - Display disk space requirements
+  - List all files that will be created/modified
+  - Estimate time for each operation
+  - Provide JSON output option for automation
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -145,21 +205,29 @@ A comprehensive bash script that automates the complete Flutter development envi
 **NFR-001:** Setup Time
 - Complete setup must complete within 15 minutes on standard macOS hardware
 - Flutter SDK installation must complete within 5 minutes on standard internet connection
+- Parallel installation of independent components where possible
+- Background downloads for large dependencies
 
 **NFR-002:** Resource Usage
 - Script must not consume more than 2GB of disk space during installation
 - Memory usage must not exceed 1GB during execution
+- Implement caching mechanisms for repeated operations
+- Support incremental updates to minimize resource usage
 
 ### 4.2 Reliability Requirements
 **NFR-003:** Error Handling
-- Script must handle network failures gracefully
-- Must provide clear error messages for common failure scenarios
+- Script must handle network failures gracefully with retry logic
+- Must provide clear error messages with troubleshooting steps for common failure scenarios
 - Must support partial completion recovery
+- Must log detailed error information for debugging
+- Must validate system requirements before starting to prevent failures
 
 **NFR-004:** Rollback Capability
 - Must support reinstallation of Flutter SDK
 - Must preserve user data during updates
 - Must provide backup mechanisms for critical operations
+- Must support rollback of failed installations
+- Network resilience with multiple mirrors for critical downloads
 
 ### 4.3 Usability Requirements
 **NFR-005:** User Experience
@@ -206,6 +274,12 @@ A comprehensive bash script that automates the complete Flutter development envi
 
 **US-007:** As a developer, I want to customize my project configuration so that it matches my team's standards.
 
+**US-008:** As a developer, I want to save my preferred configuration settings so that I don't have to re-enter them every time.
+
+**US-009:** As a developer, I want to see what changes will be made before executing them so that I can verify everything is correct.
+
+**US-010:** As a developer, I want detailed error messages and recovery options when something goes wrong so that I can fix issues quickly.
+
 ---
 
 ## 6. Technical Specifications
@@ -218,26 +292,32 @@ A comprehensive bash script that automates the complete Flutter development envi
 ### 6.2 Data Requirements
 - **Input:** Project name, target platforms, template type, organization identifier
 - **Output:** Complete Flutter project with development environment
-- **Configuration:** User preferences, system paths, Flutter channels
+- **Configuration:** User preferences stored in `config.yaml` in XDG Base Directory Specification's user data directory, system paths, Flutter channels
+- **Configuration File Format:** YAML-based configuration supporting Flutter settings, defaults, paths, and platform preferences (see Technical Specifications)
 
 ### 6.3 Security Requirements
 - **SR-001:** Must not require elevated privileges for normal operation
 - **SR-002:** Must validate all downloaded content and dependencies
 - **SR-003:** Must not expose sensitive information in logs or output
+- **SR-004:** (Future) GPG verification for downloads
+- **SR-005:** (Future) Checksum validation for all downloaded files
 
 ### 6.4 Deployment
-- **Packaging** Deploys as a python package that developers can download from github
-- **CI/CD** has it own CI/CD pipline to build and deploy to github
+- **Packaging:** Deploys as a python package that developers can download from GitHub
+- **CI/CD:** Has its own CI/CD pipeline to build and deploy to GitHub
+- **Testing:** Comprehensive testing framework for the script itself with validation of created projects
+- **Documentation:** Comprehensive help system with `--help` command, troubleshooting guide, and examples
 
 ---
 
 ## 7. Constraints and Assumptions
 
 ### 7.1 Constraints
-- **Technical:** Limited to bash scripting capabilities
-- **Platform:** Currently macOS-only
-- **Network:** Requires internet connection for downloads
+- **Technical:** Python-based CLI (migrated from bash scripting)
+- **Platform:** Currently macOS-only (Linux and Windows support planned for future versions)
+- **Network:** Requires internet connection for downloads (offline support planned)
 - **Permissions:** Requires user-level system access
+- **Maintainability:** Requires comprehensive logging and testing for long-term sustainability
 
 ### 7.2 Assumptions
 - User has basic command-line experience
@@ -313,3 +393,35 @@ A comprehensive bash script that automates the complete Flutter development envi
 ### 11.3 Change Log
 - **v1.0.0:** Initial release with core functionality
 - **Future:** Version updates will be documented here
+
+### 11.4 Configuration File Format Specification
+The configuration file (`config.yaml`) follows this structure:
+
+```yaml
+flutter:
+  channel: stable              # Flutter channel (stable, beta, dev)
+  root: ~/development/flutter  # Flutter SDK installation directory
+  update_mode: reset           # Update mode (reset, reclone, skip)
+
+defaults:
+  org: com.example             # Default organization identifier
+  template: app                # Default template (app, plugin)
+  ios_lang: swift              # iOS language (swift, objc)
+  android_lang: kotlin         # Android language (kotlin, java)
+
+paths:
+  output_dir: ./               # Default output directory for projects
+  zprofile: ~/.zprofile        # Path to shell profile file
+
+platforms:
+  ios: true                    # Enable iOS platform
+  android: true                # Enable Android platform
+  web: true                    # Enable Web platform
+  macos: false                 # Enable macOS platform
+  linux: false                 # Enable Linux platform
+  windows: false               # Enable Windows platform
+```
+
+The configuration file is stored in the XDG Base Directory Specification's user data directory:
+- macOS/Linux: `~/.config/flutter-setup/config.yaml`
+- Windows (future): `%APPDATA%/flutter-setup/config.yaml`
