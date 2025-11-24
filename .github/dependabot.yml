@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # Enable version updates for Python dependencies (uv/pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    # Allow updates to both production and development dependencies
+    ignore:
+      # Dependabot will still check these, but won't auto-update
+      # Remove or modify these ignore rules as needed
