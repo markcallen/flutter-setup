@@ -3,6 +3,7 @@
 
 import sys
 from pathlib import Path
+from typing import Any, Dict, cast
 
 import click
 from rich.console import Console
@@ -23,6 +24,35 @@ from .prerequisites import PrerequisitesManager
 from .flutter_manager import FlutterManager
 
 console = Console()
+
+
+def merge_cli_with_config(
+    ctx: click.Context,
+    param_name: str,
+    cli_value: Any,
+    file_config: Dict[str, Any],
+    config_key: str | None = None,
+) -> Any:
+    """
+    Merge CLI parameter with config file value.
+
+    If the parameter was explicitly provided via command line, use the CLI value.
+    Otherwise, use the config file value if available, or fall back to CLI value.
+
+    Args:
+        ctx: Click context to check parameter source
+        param_name: Name of the CLI parameter
+        cli_value: Value from CLI (may be default)
+        file_config: Dictionary from config file to look up values
+        config_key: Key name in config file (defaults to param_name)
+
+    Returns:
+        Merged value (CLI value if explicitly provided, else config file value or CLI default)
+    """
+    config_key = config_key or param_name
+    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+        return cli_value
+    return file_config.get(config_key, cli_value)
 
 
 def print_banner() -> None:
@@ -359,52 +389,35 @@ def setup_command(
         # If provided via command line, always use CLI value (even if it matches default)
         # Otherwise, use file config value if available, or fall back to CLI value (default)
         # For each option: use CLI value if explicitly provided, otherwise use file config
-        if ctx.get_parameter_source("org") == click.core.ParameterSource.COMMANDLINE:
-            merged_org = org
-        else:
-            merged_org = file_project.get("org", org)
-
-        if (
-            ctx.get_parameter_source("channel")
-            == click.core.ParameterSource.COMMANDLINE
-        ):
-            merged_channel = channel
-        else:
-            merged_channel = file_flutter.get("channel", channel)
-
-        if (
-            ctx.get_parameter_source("template")
-            == click.core.ParameterSource.COMMANDLINE
-        ):
-            merged_template = template
-        else:
-            merged_template = file_project.get("template", template)
-
-        if (
-            ctx.get_parameter_source("ios_language")
-            == click.core.ParameterSource.COMMANDLINE
-        ):
-            merged_ios_language = ios_language
-        else:
-            merged_ios_language = file_project.get("ios_language", ios_language)
-
-        if (
-            ctx.get_parameter_source("android_language")
-            == click.core.ParameterSource.COMMANDLINE
-        ):
-            merged_android_language = android_language
-        else:
-            merged_android_language = file_project.get(
-                "android_language", android_language
-            )
-
-        if (
-            ctx.get_parameter_source("flutter_update")
-            == click.core.ParameterSource.COMMANDLINE
-        ):
-            merged_flutter_update = flutter_update
-        else:
-            merged_flutter_update = file_flutter.get("update_mode", flutter_update)
+        merged_org = merge_cli_with_config(ctx, "org", org, file_project)
+        merged_channel = cast(
+            FlutterChannel,
+            merge_cli_with_config(ctx, "channel", channel, file_flutter),
+        )
+        merged_template = cast(
+            TemplateType,
+            merge_cli_with_config(ctx, "template", template, file_project),
+        )
+        merged_ios_language = cast(
+            IosLanguage,
+            merge_cli_with_config(ctx, "ios_language", ios_language, file_project),
+        )
+        merged_android_language = cast(
+            AndroidLanguage,
+            merge_cli_with_config(
+                ctx, "android_language", android_language, file_project
+            ),
+        )
+        merged_flutter_update = cast(
+            UpdateMode,
+            merge_cli_with_config(
+                ctx,
+                "flutter_update",
+                flutter_update,
+                file_flutter,
+                config_key="update_mode",
+            ),
+        )
 
         # Create configuration
         config = Config(
