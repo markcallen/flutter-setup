@@ -14,7 +14,7 @@
 - [x] Prerequisites installation (Xcode CLI Tools, Homebrew, Git, CocoaPods, JDK)
 - [x] Project creation with multi-platform support
 - [x] Development environment setup (VS Code/Cursor configs, Makefile, testing framework)
-- [x] CI/CD integration (GitHub Actions workflows)
+- [x] CI/CD integration (GitHub Actions workflows - basic)
 - [x] Code quality tools (Flutter lints, analysis options)
 - [x] Configuration Management
   - [x] Implement XDG Base Directory Specification support for config file location
@@ -36,6 +36,79 @@
 ---
 
 ## 🔨 High Priority (Must Have for v1.0)
+
+### CI/CD Integration - Advanced Workflows
+- [ ] GitHub Actions - Lint and Format Workflows
+  - [ ] Generate workflow for `flutter analyze`
+  - [ ] Generate workflow for `dart format --set-exit-if-changed`
+  - [ ] Configure PR and push triggers
+  - [ ] Add failure notifications
+  - [ ] Support auto-fix suggestions
+- [ ] GitHub Actions - Build Workflows
+  - [ ] Generate iOS build workflow (macOS runner)
+  - [ ] Generate Android build workflow (APK and AAB)
+  - [ ] Generate Web build workflow
+  - [ ] Generate macOS/Linux/Windows build workflows (conditional)
+  - [ ] Configure build artifacts storage
+  - [ ] Support build matrix for Flutter channels
+  - [ ] Implement path-based conditional builds
+- [ ] GitHub Actions - Test Workflows
+  - [ ] Generate unit test workflow
+  - [ ] Generate integration test workflow
+  - [ ] Configure test coverage reporting
+  - [ ] Set up test result visualization
+  - [ ] Support test sharding
+  - [ ] Support multiple Flutter version testing
+- [ ] GitHub Actions - TestFlight/Test Distribution Deployment
+  - [ ] Generate iOS TestFlight deployment workflow
+  - [ ] Generate Android Firebase App Distribution workflow
+  - [ ] Implement automatic version bumping
+  - [ ] Configure App Store Connect API integration
+  - [ ] Set up Fastlane integration (optional)
+  - [ ] Configure Firebase App Distribution (optional)
+  - [ ] Add manual approval gates
+  - [ ] Support multiple test groups
+  - [ ] Generate deployment notifications
+- [ ] GitHub Actions - App Store/Play Store Deployment
+  - [ ] Generate iOS App Store deployment workflow
+  - [ ] Generate Android Play Store deployment workflow
+  - [ ] Support production release workflows
+  - [ ] Support staged rollouts
+  - [ ] Configure App Store Connect API
+  - [ ] Configure Google Play Console API
+  - [ ] Add manual approval gates
+  - [ ] Implement version validation
+  - [ ] Generate release notifications
+- [ ] CI/CD Setup Documentation
+  - [ ] Document GitHub Secrets configuration
+  - [ ] Document App Store Connect API setup:
+    - [ ] How to generate API key
+    - [ ] How to create App Store Connect API key
+    - [ ] Required permissions and roles
+    - [ ] Key ID, Issuer ID, and private key file setup
+    - [ ] Where to find each credential in App Store Connect
+  - [ ] Document Google Play Console API setup:
+    - [ ] How to create service account
+    - [ ] How to generate JSON key file
+    - [ ] Required permissions (App Manager or Admin)
+    - [ ] Service account email configuration
+    - [ ] Where to find credentials in Google Play Console
+  - [ ] Document Firebase App Distribution setup (if used):
+    - [ ] Firebase project creation steps
+    - [ ] Service account setup
+    - [ ] Distribution group configuration
+    - [ ] Firebase CLI installation
+  - [ ] Document Fastlane setup (if used for iOS):
+    - [ ] Fastlane installation instructions
+    - [ ] Appfile configuration
+    - [ ] Fastfile configuration
+    - [ ] Certificates and provisioning profiles setup
+    - [ ] Match setup for code signing
+  - [ ] Document environment variable requirements
+  - [ ] Create troubleshooting guide for common CI/CD issues
+  - [ ] Provide example workflow configurations
+  - [ ] Document security best practices for secrets management
+  - [ ] Include screenshots/visual guides for app store credential setup
 
 ### Configuration Management
 - [x] Implement XDG Base Directory Specification support for config file location

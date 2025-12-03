@@ -121,6 +121,90 @@ A comprehensive bash script that automates the complete Flutter development envi
   - Set up automated code analysis
   - Support main branch and PR triggers
 
+**FR-009a:** GitHub Actions - Lint and Format
+- **Acceptance Criteria:**
+  - Generate workflow for automated linting (`flutter analyze`)
+  - Generate workflow for code formatting checks (`dart format --set-exit-if-changed`)
+  - Run on pull requests and pushes to main branch
+  - Fail builds if linting or formatting issues are found
+  - Provide clear error messages with fix suggestions
+  - Support auto-fix suggestions where applicable
+
+**FR-009b:** GitHub Actions - Build
+- **Acceptance Criteria:**
+  - Generate workflow for building Flutter apps for all enabled platforms
+  - Support iOS builds (requires macOS runner)
+  - Support Android builds (APK and AAB formats)
+  - Support Web builds
+  - Support macOS, Linux, Windows builds (if platforms enabled)
+  - Build artifacts stored for download
+  - Build matrix for different Flutter channels (stable, beta) if configured
+  - Conditional builds based on changed files (path-based triggers)
+
+**FR-009c:** GitHub Actions - Test
+- **Acceptance Criteria:**
+  - Generate workflow for running Flutter tests
+  - Run unit tests (`flutter test`)
+  - Run integration tests (`flutter test integration_test/`)
+  - Generate and publish test coverage reports
+  - Support test result visualization in GitHub
+  - Fail builds on test failures
+  - Support test sharding for large test suites
+  - Run on multiple Flutter versions if specified
+
+**FR-009d:** GitHub Actions - Deploy to TestFlight/Test Distribution
+- **Acceptance Criteria:**
+  - Generate workflow for deploying iOS apps to TestFlight
+  - Generate workflow for distributing Android apps via Firebase App Distribution or similar
+  - Support automatic version bumping (build numbers, version codes)
+  - Support release notes from commit messages or PR descriptions
+  - Configure App Store Connect API integration
+  - Support Fastlane integration for iOS deployment
+  - Support Firebase App Distribution for Android
+  - Support manual approval gates before deployment
+  - Support deployment to multiple test groups
+  - Generate deployment status notifications
+
+**FR-009e:** GitHub Actions - Deploy to App Store/Play Store
+- **Acceptance Criteria:**
+  - Generate workflow for deploying iOS apps to App Store
+  - Generate workflow for deploying Android apps to Google Play Store
+  - Support production release workflows
+  - Support staged rollouts (percentage-based releases)
+  - Support release notes management
+  - Support App Store Connect API for iOS
+  - Support Google Play Console API for Android
+  - Support manual approval gates before production release
+  - Support version validation and conflict detection
+  - Generate release notifications
+
+**FR-009f:** GitHub Actions - Setup Documentation and Instructions
+- **Acceptance Criteria:**
+  - Generate comprehensive setup guide for CI/CD workflows
+  - Document required GitHub Secrets configuration
+  - Document App Store Connect API setup process:
+    - How to generate API key
+    - How to create App Store Connect API key
+    - Required permissions and roles
+    - Key ID, Issuer ID, and private key file setup
+  - Document Google Play Console API setup process:
+    - How to create service account
+    - How to generate JSON key file
+    - Required permissions (App Manager or Admin)
+    - Service account email configuration
+  - Document Firebase App Distribution setup (if used):
+    - Firebase project creation
+    - Service account setup
+    - Distribution group configuration
+  - Document Fastlane setup (if used for iOS):
+    - Fastlane installation
+    - Appfile and Fastfile configuration
+    - Certificates and provisioning profiles
+  - Document environment variable requirements
+  - Provide troubleshooting guide for common CI/CD issues
+  - Include examples of workflow configurations
+  - Document security best practices for secrets management
+
 #### 3.2.2 Environment Management
 **FR-010:** Environment Variables
 - **Acceptance Criteria:**
@@ -284,6 +368,12 @@ A comprehensive bash script that automates the complete Flutter development envi
 
 **US-010:** As a developer, I want detailed error messages and recovery options when something goes wrong so that I can fix issues quickly.
 
+**US-011:** As a developer, I want automated CI/CD pipelines for linting, building, testing, and deploying my Flutter app so that I can maintain code quality and streamline releases.
+
+**US-012:** As a developer, I want to deploy my app to TestFlight and test distribution platforms automatically so that I can share builds with testers without manual steps.
+
+**US-013:** As a developer, I want to deploy my app to production app stores (App Store, Play Store) automatically so that I can release updates efficiently and consistently.
+
 ---
 
 ## 6. Technical Specifications
@@ -311,6 +401,13 @@ A comprehensive bash script that automates the complete Flutter development envi
 - **CI/CD:** Has its own CI/CD pipeline to build and deploy to GitHub
 - **Testing:** Comprehensive testing framework for the script itself with validation of created projects
 - **Documentation:** Comprehensive help system with `--help` command, troubleshooting guide, and examples
+- **Generated CI/CD:** Creates GitHub Actions workflows for:
+  - Code quality (linting, formatting)
+  - Building for all enabled platforms
+  - Running tests with coverage reporting
+  - Deploying to test distribution platforms (TestFlight, Firebase App Distribution)
+  - Deploying to production app stores (App Store, Play Store)
+  - Includes comprehensive setup documentation for app store credentials
 
 ---
 
