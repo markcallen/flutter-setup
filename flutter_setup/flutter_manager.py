@@ -270,14 +270,22 @@ class FlutterManager:
                 check=False,
             )
 
+            # Flutter doctor outputs to stdout, but may also use stderr
+            output = result.stdout or result.stderr or ""
+
             if result.returncode == 0:
                 console.print("  ✅ Flutter doctor passed")
             else:
                 console.print("  ⚠️  Flutter doctor found issues:")
-                console.print(result.stderr)
+                # Print output (stdout takes precedence, fallback to stderr)
+                if result.stdout:
+                    console.print(result.stdout)
+                if result.stderr:
+                    console.print(result.stderr)
 
-                # Check for Android licenses
-                if "Some Android licenses not accepted" in result.stderr:
+                # Check for Android licenses in either stream
+                combined_output = output
+                if "Some Android licenses not accepted" in combined_output:
                     console.print("  📱 Android licenses need acceptance")
                     self._handle_android_licenses()
 
@@ -400,12 +408,16 @@ class FlutterManager:
                     check=False,
                 )
 
+                # Flutter doctor outputs to stdout, but may also use stderr
+                output = result.stdout or result.stderr or ""
+
                 if result.returncode == 0:
                     console.print("  ✅ Flutter doctor passed")
                 else:
                     console.print("  ⚠️  Flutter doctor found issues:")
                     # Print only the summary, not the full verbose output
-                    lines = result.stderr.split("\n")
+                    # Check both stdout (primary) and stderr (secondary)
+                    lines = output.split("\n")
                     summary_lines = [
                         line
                         for line in lines

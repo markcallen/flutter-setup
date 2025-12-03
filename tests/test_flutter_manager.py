@@ -168,13 +168,16 @@ class TestFlutterManager:
     def test_run_flutter_doctor_success(self, manager: FlutterManager) -> None:
         """Test running Flutter doctor successfully."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(returncode=0, stderr="")
+            mock_run.return_value = Mock(
+                returncode=0, stdout="Doctor summary", stderr=""
+            )
             manager._run_flutter_doctor()  # Should not raise
 
     def test_run_flutter_doctor_failure(self, manager: FlutterManager) -> None:
         """Test running Flutter doctor with issues."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(returncode=1, stderr="Some issues")
+            # Flutter doctor outputs issues to stdout
+            mock_run.return_value = Mock(returncode=1, stdout="Some issues", stderr="")
             with patch.object(manager, "_handle_android_licenses"):
                 manager._run_flutter_doctor()  # Should not raise
 
