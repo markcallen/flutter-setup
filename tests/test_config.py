@@ -147,3 +147,111 @@ class TestConfig:
                 verbose=False,
                 flutter_location=Path.home() / "development" / "flutter",
             )
+
+    def test_sanitize_package_name_with_special_chars(self) -> None:
+        """Test package name sanitization with special characters."""
+        config = Config(
+            project_name="My-App@123!",
+            platforms=["ios"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+        )
+        assert config.package_name == "my_app_123"
+
+    def test_sanitize_package_name_starts_with_number(self) -> None:
+        """Test package name sanitization when it starts with a number."""
+        config = Config(
+            project_name="123App",
+            platforms=["ios"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+        )
+        assert config.package_name.startswith("app_")
+
+    def test_sanitize_package_name_empty_after_sanitization(self) -> None:
+        """Test package name sanitization when result would be empty."""
+        config = Config(
+            project_name="!!!",
+            platforms=["ios"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+        )
+        assert config.package_name == "app"
+
+    def test_invalid_ios_language_for_plugin(self) -> None:
+        """Test validation of invalid iOS language for plugin template."""
+        with pytest.raises(ValueError, match="Invalid iOS language"):
+            Config(
+                project_name="TestApp",
+                platforms=["ios"],
+                org="com.test",
+                channel="stable",
+                output_dir=Path("."),
+                template="plugin",
+                ios_language="python",  # type: ignore[arg-type]  # Invalid
+                android_language="kotlin",
+                flutter_update_mode="reset",
+                dry_run=False,
+                verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
+            )
+
+    def test_invalid_android_language_for_plugin(self) -> None:
+        """Test validation of invalid Android language for plugin template."""
+        with pytest.raises(ValueError, match="Invalid Android language"):
+            Config(
+                project_name="TestApp",
+                platforms=["ios"],
+                org="com.test",
+                channel="stable",
+                output_dir=Path("."),
+                template="plugin",
+                ios_language="swift",
+                android_language="python",  # type: ignore[arg-type]  # Invalid
+                flutter_update_mode="reset",
+                dry_run=False,
+                verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
+            )
+
+    def test_all_valid_platforms(self) -> None:
+        """Test that all valid platforms are accepted."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["ios", "android", "macos", "linux", "windows", "web"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+        )
+        assert len(config.platforms) == 6

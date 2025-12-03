@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from rich.console import Console
 
 console = Console()
