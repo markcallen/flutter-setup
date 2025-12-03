@@ -537,5 +537,5 @@ flutter-setup init
 flutter-setup init
 
 # Use configuration (CLI args override config)
-flutter-setup MyApp ios android web --channel beta  # Uses beta channel, other settings from config
+flutter-setup setup MyApp ios android web --channel beta  # Uses beta channel, other settings from config
 ```

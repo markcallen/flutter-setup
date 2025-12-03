@@ -38,8 +38,10 @@ def print_banner() -> None:
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """Flutter Development Environment Setup CLI."""
-    # If no subcommand provided, we'll handle it in main()
-    pass
+    # If no subcommand provided, show banner and help
+    if ctx.invoked_subcommand is None:
+        print_banner()
+        click.echo(ctx.get_help())
 
 
 @cli.command("init")
@@ -443,21 +445,6 @@ def setup_command(
 
 def main() -> None:
     """Main entry point that routes to appropriate command."""
-    import sys
-
-    # If no subcommand is provided and we have arguments, treat as setup command
-    # This maintains backward compatibility
-    if len(sys.argv) > 1 and sys.argv[1] not in [
-        "init",
-        "setup",
-        "check",
-        "--help",
-        "-h",
-        "--version",
-    ]:
-        # Insert "setup" as the subcommand
-        sys.argv.insert(1, "setup")
-
     cli()
 
 

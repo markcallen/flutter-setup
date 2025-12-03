@@ -50,16 +50,16 @@ You can run `flutter-setup init` again anytime to update your configuration.
 
 ```bash
 # Create a new Flutter app with iOS, Android, and Web support
-flutter-setup MyAwesomeApp ios android web
+flutter-setup setup MyAwesomeApp ios android web
 
 # Create a plugin with specific language preferences
-flutter-setup MyPlugin --template plugin --ios-language objc --android-language java ios android
+flutter-setup setup MyPlugin --template plugin --ios-language objc --android-language java ios android
 
 # Use beta channel and custom organization
-flutter-setup MyApp --channel beta --org com.mycompany ios android macos
+flutter-setup setup MyApp --channel beta --org com.mycompany ios android macos
 
 # Preview what would happen (dry run)
-flutter-setup MyApp --dry-run ios android
+flutter-setup setup MyApp --dry-run ios android
 ```
 
 ## Commands
@@ -75,11 +75,9 @@ flutter-setup init --force      # Overwrite existing config
 The config file is stored at `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`).
 
 ### `setup` - Project Setup
-Set up a new Flutter project (this is the default command):
+Set up a new Flutter project:
 
 ```bash
-flutter-setup MyApp ios android web
-# or explicitly:
 flutter-setup setup MyApp ios android web
 ```
 
