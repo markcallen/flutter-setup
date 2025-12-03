@@ -23,6 +23,7 @@ class TestConfig:
             flutter_update_mode="reset",
             dry_run=True,
             verbose=True,
+            flutter_location=Path.home() / "development" / "flutter",
         )
 
         assert config.project_name == "TestApp"
@@ -50,6 +51,7 @@ class TestConfig:
             flutter_update_mode="reset",
             dry_run=False,
             verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
         )
 
         assert config.package_name == "my_test_app"
@@ -68,6 +70,7 @@ class TestConfig:
             flutter_update_mode="reset",
             dry_run=False,
             verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
         )
 
         assert config.platforms_csv == "ios,android,web"
@@ -86,6 +89,7 @@ class TestConfig:
             flutter_update_mode="reset",
             dry_run=False,
             verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
         )
 
         assert config.project_path == Path("/tmp/TestApp")
@@ -105,6 +109,7 @@ class TestConfig:
                 flutter_update_mode="reset",
                 dry_run=False,
                 verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
             )
 
     def test_invalid_platforms(self) -> None:
@@ -122,6 +127,7 @@ class TestConfig:
                 flutter_update_mode="reset",
                 dry_run=False,
                 verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
             )
 
     def test_empty_platforms(self) -> None:
@@ -139,4 +145,5 @@ class TestConfig:
                 flutter_update_mode="reset",
                 dry_run=False,
                 verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
             )

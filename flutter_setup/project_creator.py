@@ -1,7 +1,6 @@
 """Project creation for Flutter setup."""
 
 import subprocess
-from pathlib import Path
 from typing import List
 
 from rich.console import Console
@@ -18,8 +17,7 @@ class ProjectCreator:
     def __init__(self, config: Config):
         """Initialize ProjectCreator."""
         self.config = config
-        self.home = Path.home()
-        self.flutter_root = self.home / "development" / "flutter"
+        self.flutter_root = config.flutter_location
 
     def create_project(self) -> None:
         """Create the Flutter project."""
