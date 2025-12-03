@@ -309,7 +309,9 @@ def check_command(verbose: bool) -> None:
     is_flag=True,
     help="Enable verbose output",
 )
+@click.pass_context
 def setup_command(
+    ctx: click.Context,
     project_name: str,
     platforms: tuple[str, ...],
     org: str,
@@ -347,34 +349,60 @@ def setup_command(
             config_manager.set_flutter_location(flutter_location)
 
         # Merge file config with command-line arguments
-        # CLI args take precedence, but if they match Click defaults, use file config
+        # CLI args always take precedence when explicitly provided
         file_project = file_config.get("project", {})
         file_flutter = file_config.get("flutter", {})
 
-        # For each option: if CLI value matches Click default, prefer file config
-        # Otherwise, use CLI value (which may also match file config, that's fine)
-        merged_org = file_project.get("org", org) if org == "com.example" else org
-        merged_channel = (
-            file_flutter.get("channel", channel) if channel == "stable" else channel
-        )
-        merged_template = (
-            file_project.get("template", template) if template == "app" else template
-        )
-        merged_ios_language = (
-            file_project.get("ios_language", ios_language)
-            if ios_language == "swift"
-            else ios_language
-        )
-        merged_android_language = (
-            file_project.get("android_language", android_language)
-            if android_language == "kotlin"
-            else android_language
-        )
-        merged_flutter_update = (
-            file_flutter.get("update_mode", flutter_update)
-            if flutter_update == "reset"
-            else flutter_update
-        )
+        # Check parameter sources to determine if CLI values were explicitly provided
+        # If provided via command line, always use CLI value (even if it matches default)
+        # Otherwise, use file config value if available, or fall back to CLI value (default)
+        # For each option: use CLI value if explicitly provided, otherwise use file config
+        if ctx.get_parameter_source("org") == click.core.ParameterSource.COMMANDLINE:
+            merged_org = org
+        else:
+            merged_org = file_project.get("org", org)
+
+        if (
+            ctx.get_parameter_source("channel")
+            == click.core.ParameterSource.COMMANDLINE
+        ):
+            merged_channel = channel
+        else:
+            merged_channel = file_flutter.get("channel", channel)
+
+        if (
+            ctx.get_parameter_source("template")
+            == click.core.ParameterSource.COMMANDLINE
+        ):
+            merged_template = template
+        else:
+            merged_template = file_project.get("template", template)
+
+        if (
+            ctx.get_parameter_source("ios_language")
+            == click.core.ParameterSource.COMMANDLINE
+        ):
+            merged_ios_language = ios_language
+        else:
+            merged_ios_language = file_project.get("ios_language", ios_language)
+
+        if (
+            ctx.get_parameter_source("android_language")
+            == click.core.ParameterSource.COMMANDLINE
+        ):
+            merged_android_language = android_language
+        else:
+            merged_android_language = file_project.get(
+                "android_language", android_language
+            )
+
+        if (
+            ctx.get_parameter_source("flutter_update")
+            == click.core.ParameterSource.COMMANDLINE
+        ):
+            merged_flutter_update = flutter_update
+        else:
+            merged_flutter_update = file_flutter.get("update_mode", flutter_update)
 
         # Create configuration
         config = Config(
