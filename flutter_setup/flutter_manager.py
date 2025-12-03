@@ -1,5 +1,6 @@
 """Flutter SDK management for Flutter setup."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ class FlutterManager:
         """Initialize FlutterManager."""
         self.config = config
         self.home = Path.home()
-        self.flutter_root = self.home / "development" / "flutter"
+        self.flutter_root = config.flutter_location
         self.zprofile = self.home / ".zprofile"
 
     def ensure_flutter(self) -> None:
@@ -218,12 +219,34 @@ class FlutterManager:
         if self.zprofile.exists():
             with open(self.zprofile, "r") as f:
                 content = f.read()
-                if flutter_path not in content:
-                    with open(self.zprofile, "a") as f:
-                        f.write(f"\n{flutter_path}\n")
-                    console.print("  ✅ Flutter PATH added to .zprofile")
-                else:
+
+            # Check if any Flutter PATH is already configured
+            # Pattern matches: export PATH="/path/to/flutter/bin:$PATH"
+            flutter_path_pattern = (
+                r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
+            )
+            existing_match = re.search(flutter_path_pattern, content)
+
+            if existing_match:
+                existing_flutter_path = existing_match.group(1)
+                # Check if it's the same path we want to add
+                if existing_flutter_path == str(self.flutter_root / "bin"):
                     console.print("  ✅ Flutter PATH already in .zprofile")
+                else:
+                    console.print(
+                        f"  ⚠️  Different Flutter PATH already configured in .zprofile: {existing_flutter_path}"
+                    )
+                    console.print(
+                        f"  ℹ️  Skipping PATH update. Current Flutter location: {self.flutter_root}"
+                    )
+            elif flutter_path not in content:
+                # No Flutter PATH found, add it
+                with open(self.zprofile, "a") as f:
+                    f.write(f"\n{flutter_path}\n")
+                console.print("  ✅ Flutter PATH added to .zprofile")
+            else:
+                # Exact path already exists
+                console.print("  ✅ Flutter PATH already in .zprofile")
         else:
             with open(self.zprofile, "w") as f:
                 f.write(f"{flutter_path}\n")
@@ -247,14 +270,22 @@ class FlutterManager:
                 check=False,
             )
 
+            # Flutter doctor outputs to stdout, but may also use stderr
+            output = result.stdout or result.stderr or ""
+
             if result.returncode == 0:
                 console.print("  ✅ Flutter doctor passed")
             else:
                 console.print("  ⚠️  Flutter doctor found issues:")
-                console.print(result.stderr)
+                # Print output (stdout takes precedence, fallback to stderr)
+                if result.stdout:
+                    console.print(result.stdout)
+                if result.stderr:
+                    console.print(result.stderr)
 
-                # Check for Android licenses
-                if "Some Android licenses not accepted" in result.stderr:
+                # Check for Android licenses in either stream
+                combined_output = output
+                if "Some Android licenses not accepted" in combined_output:
                     console.print("  📱 Android licenses need acceptance")
                     self._handle_android_licenses()
 
@@ -270,3 +301,134 @@ class FlutterManager:
         console.print(
             "  ℹ️  You can run 'flutter doctor --android-licenses' later to accept licenses"
         )
+
+    def check_only(self) -> bool:
+        """Check Flutter SDK installation without installing/updating. Returns True if all checks pass."""
+        all_ok = True
+
+        # Check if Flutter is installed
+        console.print("  🔍 Checking Flutter SDK installation...")
+        if not self.flutter_root.exists() or not (self.flutter_root / ".git").exists():
+            console.print(f"  ❌ Flutter SDK not found at {self.flutter_root}")
+            all_ok = False
+        else:
+            console.print(f"  ✅ Flutter SDK found at {self.flutter_root}")
+
+            # Check Flutter binary
+            flutter_bin = self.flutter_root / "bin" / "flutter"
+            if not flutter_bin.exists():
+                console.print("  ❌ Flutter binary not found")
+                all_ok = False
+            else:
+                console.print("  ✅ Flutter binary found")
+
+        # Check Flutter PATH configuration
+        console.print("  🔧 Checking Flutter PATH configuration...")
+        if self.zprofile.exists():
+            with open(self.zprofile, "r") as f:
+                content = f.read()
+
+            flutter_path_pattern = (
+                r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
+            )
+            existing_match = re.search(flutter_path_pattern, content)
+
+            if existing_match:
+                existing_flutter_path = existing_match.group(1)
+                expected_path = str(self.flutter_root / "bin")
+                if existing_flutter_path == expected_path:
+                    console.print("  ✅ Flutter PATH correctly configured in .zprofile")
+                else:
+                    console.print(
+                        f"  ⚠️  Different Flutter PATH configured: {existing_flutter_path}"
+                    )
+                    console.print(f"  ℹ️  Expected: {expected_path}")
+            else:
+                console.print("  ⚠️  Flutter PATH not found in .zprofile")
+        else:
+            console.print("  ⚠️  .zprofile not found")
+
+        # Check if Flutter is up to date (if installed)
+        if self.flutter_root.exists() and (self.flutter_root / ".git").exists():
+            console.print(
+                f"  🔄 Checking Flutter update status ({self.config.channel})..."
+            )
+            try:
+                # Fetch latest changes
+                subprocess.run(
+                    ["git", "fetch", "origin", "--prune"],
+                    cwd=self.flutter_root,
+                    check=True,
+                    capture_output=True,
+                )
+
+                # Check if local branch is up to date
+                result = subprocess.run(
+                    [
+                        "git",
+                        "rev-list",
+                        "--left-right",
+                        "--count",
+                        f"origin/{self.config.channel}...{self.config.channel}",
+                    ],
+                    cwd=self.flutter_root,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+                counts = result.stdout.strip().split()
+                if len(counts) == 2:
+                    left_ahead = int(counts[0])
+                    right_ahead = int(counts[1])
+                    if left_ahead == 0 and right_ahead == 0:
+                        console.print("  ✅ Flutter is up to date")
+                    elif left_ahead > 0:
+                        console.print(
+                            f"  ⚠️  Flutter is {left_ahead} commit(s) behind origin"
+                        )
+                    elif right_ahead > 0:
+                        console.print(
+                            f"  ℹ️  Flutter has {right_ahead} local commit(s) ahead of origin"
+                        )
+            except subprocess.CalledProcessError:
+                console.print("  ⚠️  Could not check Flutter update status")
+
+        # Run flutter doctor
+        if (
+            self.flutter_root.exists()
+            and (self.flutter_root / "bin" / "flutter").exists()
+        ):
+            console.print("  🏥 Running Flutter doctor...")
+            try:
+                result = subprocess.run(
+                    [str(self.flutter_root / "bin" / "flutter"), "doctor", "-v"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                # Flutter doctor outputs to stdout, but may also use stderr
+                output = result.stdout or result.stderr or ""
+
+                if result.returncode == 0:
+                    console.print("  ✅ Flutter doctor passed")
+                else:
+                    console.print("  ⚠️  Flutter doctor found issues:")
+                    # Print only the summary, not the full verbose output
+                    # Check both stdout (primary) and stderr (secondary)
+                    lines = output.split("\n")
+                    summary_lines = [
+                        line
+                        for line in lines
+                        if "•" in line or "!" in line or "✗" in line or "✓" in line
+                    ]
+                    if summary_lines:
+                        for line in summary_lines[:10]:  # Limit output
+                            console.print(f"    {line}")
+                    all_ok = False
+            except Exception as e:
+                console.print(f"  ⚠️  Flutter doctor warning: {e}")
+                all_ok = False
+
+        return all_ok

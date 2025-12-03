@@ -28,6 +28,7 @@ class Config:
     flutter_update_mode: UpdateMode
     dry_run: bool
     verbose: bool
+    flutter_location: Path
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

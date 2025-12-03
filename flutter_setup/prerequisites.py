@@ -195,3 +195,59 @@ class PrerequisitesManager:
             console.print("  ✅ iOS tools configured")
         except Exception as e:
             console.print(f"  ⚠️  iOS tools configuration warning: {e}")
+
+    def check_only(self) -> bool:
+        """Check prerequisites without installing. Returns True if all checks pass."""
+        all_ok = True
+
+        # Check Xcode Command Line Tools
+        console.print("  📱 Checking Xcode Command Line Tools...")
+        try:
+            result = subprocess.run(
+                ["xcode-select", "-p"], capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                console.print("  ✅ Xcode Command Line Tools found")
+            else:
+                console.print("  ❌ Xcode Command Line Tools not found")
+                all_ok = False
+        except Exception as e:
+            console.print(f"  ❌ Failed to check Xcode tools: {e}")
+            all_ok = False
+
+        # Check Homebrew
+        console.print("  🍺 Checking Homebrew...")
+        try:
+            result = subprocess.run(
+                ["brew", "--version"], capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                console.print("  ✅ Homebrew found")
+            else:
+                console.print("  ❌ Homebrew not found")
+                all_ok = False
+        except Exception as e:
+            console.print(f"  ❌ Failed to check Homebrew: {e}")
+            all_ok = False
+
+        # Check required packages
+        required_packages = ["git", "cocoapods"]
+        for package in required_packages:
+            console.print(f"  📦 Checking {package}...")
+            try:
+                result = subprocess.run(
+                    ["brew", "list", package],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    console.print(f"  ✅ {package} installed")
+                else:
+                    console.print(f"  ❌ {package} not installed")
+                    all_ok = False
+            except Exception as e:
+                console.print(f"  ❌ Failed to check {package}: {e}")
+                all_ok = False
+
+        return all_ok

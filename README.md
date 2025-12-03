@@ -26,38 +26,76 @@ cd flutter-setup
 uv pip install -e .
 
 # Or install directly from GitHub (when published)
-uv pip install git+https://github.com/yourusername/flutter-setup.git
+uv pip install git+https://github.com/markcallen/flutter-setup.git
 ```
+
+### Configuration Setup
+
+Before your first use, initialize your configuration:
+
+```bash
+# Interactive configuration setup
+flutter-setup init
+```
+
+This will:
+- Detect Flutter location from environment variables or PATH
+- Prompt for Flutter channel (stable/beta)
+- Prompt for organization ID
+- Create config file at `~/.config/flutter-setup/config.yaml`
+
+You can run `flutter-setup init` again anytime to update your configuration.
 
 ### Basic Usage
 
 ```bash
 # Create a new Flutter app with iOS, Android, and Web support
-flutter-setup MyAwesomeApp ios android web
+flutter-setup setup MyAwesomeApp ios android web
 
 # Create a plugin with specific language preferences
-flutter-setup MyPlugin --template plugin --objc --java ios android
+flutter-setup setup MyPlugin --template plugin --ios-language objc --android-language java ios android
 
 # Use beta channel and custom organization
-flutter-setup MyApp --channel beta --org com.mycompany ios android macos
+flutter-setup setup MyApp --channel beta --org com.mycompany ios android macos
 
 # Preview what would happen (dry run)
-flutter-setup MyApp --dry-run ios android
+flutter-setup setup MyApp --dry-run ios android
+```
+
+## Commands
+
+### `init` - Configuration Setup
+Initialize or update your configuration file:
+
+```bash
+flutter-setup init              # Create or update config interactively
+flutter-setup init --force      # Overwrite existing config
+```
+
+The config file is stored at `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`).
+
+### `setup` - Project Setup
+Set up a new Flutter project:
+
+```bash
+flutter-setup setup MyApp ios android web
 ```
 
 ## Command Line Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--org` | Organization identifier | `com.example` |
-| `--channel` | Flutter channel (stable/beta) | `stable` |
-| `--dir` | Output directory | Current directory |
-| `--template` | Project template (app/plugin) | `app` |
-| `--ios-language` | iOS language for plugins (swift/objc) | `swift` |
-| `--android-language` | Android language for plugins (kotlin/java) | `kotlin` |
-| `--flutter-update` | Flutter update mode (reset/reclone/skip) | `reset` |
-| `--dry-run` | Preview actions without executing | `false` |
-| `--verbose` | Enable verbose output | `false` |
+| Option | Description | Default | Config File |
+|--------|-------------|---------|-------------|
+| `--org` | Organization identifier | `com.example` | ✅ |
+| `--channel` | Flutter channel (stable/beta) | `stable` | ✅ |
+| `--dir` | Output directory | Current directory | ❌ |
+| `--template` | Project template (app/plugin) | `app` | ✅ |
+| `--ios-language` | iOS language for plugins (swift/objc) | `swift` | ✅ |
+| `--android-language` | Android language for plugins (kotlin/java) | `kotlin` | ✅ |
+| `--flutter-update` | Flutter update mode (reset/reclone/skip) | `reset` | ✅ |
+| `--dry-run` | Preview actions without executing | `false` | ❌ |
+| `--verbose` | Enable verbose output | `false` | ❌ |
+
+**Note:** Options marked with ✅ can be set in the config file via `flutter-setup init`. Command-line arguments override config file values.
 
 ## What Gets Set Up
 
@@ -123,6 +161,33 @@ make integration      # Integration tests
 make analyze          # Flutter analyze
 ```
 
+## Configuration
+
+The tool uses a YAML-based configuration file that stores your preferences:
+
+**Location:** `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`)
+
+**Example config:**
+```yaml
+flutter:
+  location: ~/development/flutter
+  channel: stable
+  update_mode: reset
+
+project:
+  org: com.mycompany
+  template: app
+  ios_language: swift
+  android_language: kotlin
+```
+
+**Configuration Features:**
+- ✅ XDG Base Directory Specification compliant
+- ✅ Automatic Flutter location detection from environment
+- ✅ Interactive setup via `flutter-setup init`
+- ✅ Command-line arguments override config values
+- ✅ Persistent settings across sessions
+
 ## Architecture
 
 The package is built with modern Python best practices:
@@ -131,7 +196,7 @@ The package is built with modern Python best practices:
 - **Type Safety**: Full type hints with mypy support
 - **Error Handling**: Comprehensive exception handling
 - **Rich CLI**: Beautiful terminal output with progress indicators
-- **Configuration**: Flexible configuration system
+- **Configuration**: Flexible configuration system with XDG support
 - **Testing**: Built-in test structure and CI/CD
 
 ## Development

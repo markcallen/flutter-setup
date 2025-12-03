@@ -121,6 +121,90 @@ A comprehensive bash script that automates the complete Flutter development envi
   - Set up automated code analysis
   - Support main branch and PR triggers
 
+**FR-009a:** GitHub Actions - Lint and Format
+- **Acceptance Criteria:**
+  - Generate workflow for automated linting (`flutter analyze`)
+  - Generate workflow for code formatting checks (`dart format --set-exit-if-changed`)
+  - Run on pull requests and pushes to main branch
+  - Fail builds if linting or formatting issues are found
+  - Provide clear error messages with fix suggestions
+  - Support auto-fix suggestions where applicable
+
+**FR-009b:** GitHub Actions - Build
+- **Acceptance Criteria:**
+  - Generate workflow for building Flutter apps for all enabled platforms
+  - Support iOS builds (requires macOS runner)
+  - Support Android builds (APK and AAB formats)
+  - Support Web builds
+  - Support macOS, Linux, Windows builds (if platforms enabled)
+  - Build artifacts stored for download
+  - Build matrix for different Flutter channels (stable, beta) if configured
+  - Conditional builds based on changed files (path-based triggers)
+
+**FR-009c:** GitHub Actions - Test
+- **Acceptance Criteria:**
+  - Generate workflow for running Flutter tests
+  - Run unit tests (`flutter test`)
+  - Run integration tests (`flutter test integration_test/`)
+  - Generate and publish test coverage reports
+  - Support test result visualization in GitHub
+  - Fail builds on test failures
+  - Support test sharding for large test suites
+  - Run on multiple Flutter versions if specified
+
+**FR-009d:** GitHub Actions - Deploy to TestFlight/Test Distribution
+- **Acceptance Criteria:**
+  - Generate workflow for deploying iOS apps to TestFlight
+  - Generate workflow for distributing Android apps via Firebase App Distribution or similar
+  - Support automatic version bumping (build numbers, version codes)
+  - Support release notes from commit messages or PR descriptions
+  - Configure App Store Connect API integration
+  - Support Fastlane integration for iOS deployment
+  - Support Firebase App Distribution for Android
+  - Support manual approval gates before deployment
+  - Support deployment to multiple test groups
+  - Generate deployment status notifications
+
+**FR-009e:** GitHub Actions - Deploy to App Store/Play Store
+- **Acceptance Criteria:**
+  - Generate workflow for deploying iOS apps to App Store
+  - Generate workflow for deploying Android apps to Google Play Store
+  - Support production release workflows
+  - Support staged rollouts (percentage-based releases)
+  - Support release notes management
+  - Support App Store Connect API for iOS
+  - Support Google Play Console API for Android
+  - Support manual approval gates before production release
+  - Support version validation and conflict detection
+  - Generate release notifications
+
+**FR-009f:** GitHub Actions - Setup Documentation and Instructions
+- **Acceptance Criteria:**
+  - Generate comprehensive setup guide for CI/CD workflows
+  - Document required GitHub Secrets configuration
+  - Document App Store Connect API setup process:
+    - How to generate API key
+    - How to create App Store Connect API key
+    - Required permissions and roles
+    - Key ID, Issuer ID, and private key file setup
+  - Document Google Play Console API setup process:
+    - How to create service account
+    - How to generate JSON key file
+    - Required permissions (App Manager or Admin)
+    - Service account email configuration
+  - Document Firebase App Distribution setup (if used):
+    - Firebase project creation
+    - Service account setup
+    - Distribution group configuration
+  - Document Fastlane setup (if used for iOS):
+    - Fastlane installation
+    - Appfile and Fastfile configuration
+    - Certificates and provisioning profiles
+  - Document environment variable requirements
+  - Provide troubleshooting guide for common CI/CD issues
+  - Include examples of workflow configurations
+  - Document security best practices for secrets management
+
 #### 3.2.2 Environment Management
 **FR-010:** Environment Variables
 - **Acceptance Criteria:**
@@ -138,14 +222,18 @@ A comprehensive bash script that automates the complete Flutter development envi
   - Enable format-on-save
 
 #### 3.2.4 Configuration Management
-**FR-012:** User Configuration File
+**FR-012:** User Configuration File ✅ **IMPLEMENTED**
 - **Acceptance Criteria:**
-  - Create `config.yaml` file in XDG Base Directory Specification's user data directory
-  - Support configuration for Flutter channel, root directory, update modes
-  - Store default project settings (organization, template, languages)
-  - Allow environment variable overrides
-  - Enable configuration save and reuse
-  - Support configuration file format as specified in Technical Specifications
+  - ✅ Create `config.yaml` file in XDG Base Directory Specification's user data directory
+  - ✅ Support configuration for Flutter channel, location directory, update modes
+  - ✅ Store default project settings (organization, template, languages)
+  - ✅ Enable configuration save and reuse
+  - ✅ Support configuration file format as specified in Technical Specifications
+  - ✅ Interactive `init` command for configuration setup
+  - ✅ Automatic Flutter location detection from environment variables (`FLUTTER_ROOT`, PATH)
+  - ✅ Interactive prompts for channel selection and organization ID
+  - ✅ Load and merge configuration with command-line arguments (CLI args take precedence)
+  - ⏳ Allow environment variable overrides (planned for future)
 
 **FR-013:** System Requirements Validation
 - **Acceptance Criteria:**
@@ -274,11 +362,17 @@ A comprehensive bash script that automates the complete Flutter development envi
 
 **US-007:** As a developer, I want to customize my project configuration so that it matches my team's standards.
 
-**US-008:** As a developer, I want to save my preferred configuration settings so that I don't have to re-enter them every time.
+**US-008:** As a developer, I want to save my preferred configuration settings so that I don't have to re-enter them every time. ✅ **IMPLEMENTED**
 
 **US-009:** As a developer, I want to see what changes will be made before executing them so that I can verify everything is correct.
 
 **US-010:** As a developer, I want detailed error messages and recovery options when something goes wrong so that I can fix issues quickly.
+
+**US-011:** As a developer, I want automated CI/CD pipelines for linting, building, testing, and deploying my Flutter app so that I can maintain code quality and streamline releases.
+
+**US-012:** As a developer, I want to deploy my app to TestFlight and test distribution platforms automatically so that I can share builds with testers without manual steps.
+
+**US-013:** As a developer, I want to deploy my app to production app stores (App Store, Play Store) automatically so that I can release updates efficiently and consistently.
 
 ---
 
@@ -307,6 +401,13 @@ A comprehensive bash script that automates the complete Flutter development envi
 - **CI/CD:** Has its own CI/CD pipeline to build and deploy to GitHub
 - **Testing:** Comprehensive testing framework for the script itself with validation of created projects
 - **Documentation:** Comprehensive help system with `--help` command, troubleshooting guide, and examples
+- **Generated CI/CD:** Creates GitHub Actions workflows for:
+  - Code quality (linting, formatting)
+  - Building for all enabled platforms
+  - Running tests with coverage reporting
+  - Deploying to test distribution platforms (TestFlight, Firebase App Distribution)
+  - Deploying to production app stores (App Store, Play Store)
+  - Includes comprehensive setup documentation for app store credentials
 
 ---
 
@@ -395,33 +496,46 @@ A comprehensive bash script that automates the complete Flutter development envi
 - **Future:** Version updates will be documented here
 
 ### 11.4 Configuration File Format Specification
+
 The configuration file (`config.yaml`) follows this structure:
 
 ```yaml
 flutter:
-  channel: stable              # Flutter channel (stable, beta, dev)
-  root: ~/development/flutter  # Flutter SDK installation directory
-  update_mode: reset           # Update mode (reset, reclone, skip)
+  location: ~/development/flutter  # Flutter SDK installation directory (detected or user-specified)
+  channel: stable                  # Flutter channel (stable, beta)
+  update_mode: reset               # Update mode (reset, reclone, skip)
 
-defaults:
-  org: com.example             # Default organization identifier
-  template: app                # Default template (app, plugin)
-  ios_lang: swift              # iOS language (swift, objc)
-  android_lang: kotlin         # Android language (kotlin, java)
-
-paths:
-  output_dir: ./               # Default output directory for projects
-  zprofile: ~/.zprofile        # Path to shell profile file
-
-platforms:
-  ios: true                    # Enable iOS platform
-  android: true                # Enable Android platform
-  web: true                    # Enable Web platform
-  macos: false                 # Enable macOS platform
-  linux: false                 # Enable Linux platform
-  windows: false               # Enable Windows platform
+project:
+  org: com.example                 # Default organization identifier
+  template: app                    # Default template (app, plugin)
+  ios_language: swift             # iOS language for plugins (swift, objc)
+  android_language: kotlin         # Android language for plugins (kotlin, java)
 ```
 
-The configuration file is stored in the XDG Base Directory Specification's user data directory:
-- macOS/Linux: `~/.config/flutter-setup/config.yaml`
-- Windows (future): `%APPDATA%/flutter-setup/config.yaml`
+**Configuration Management:**
+
+1. **Initialization:** Run `flutter-setup init` to create or update the configuration file interactively
+2. **Location Detection:** The tool automatically detects Flutter location from:
+   - `FLUTTER_ROOT` environment variable
+   - `flutter` command in PATH
+   - Common installation locations (`~/development/flutter`, `~/flutter`, etc.)
+3. **Interactive Setup:** The `init` command prompts for:
+   - Flutter SDK location (with auto-detection)
+   - Flutter channel selection
+   - Organization ID
+4. **Configuration Precedence:** Command-line arguments override config file values
+5. **Storage:** The configuration file is stored in the XDG Base Directory Specification's user data directory:
+   - macOS/Linux: `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`)
+   - Windows (future): `%APPDATA%/flutter-setup/config.yaml`
+
+**Example Usage:**
+```bash
+# First-time setup - interactive configuration
+flutter-setup init
+
+# Update existing configuration
+flutter-setup init
+
+# Use configuration (CLI args override config)
+flutter-setup setup MyApp ios android web --channel beta  # Uses beta channel, other settings from config
+```
