@@ -3,8 +3,10 @@
 import subprocess
 from pathlib import Path
 
+import yaml
 from rich.console import Console
 
+from .cicd_generator import CicdGenerator
 from .config import Config
 
 console = Console()
@@ -41,8 +43,8 @@ class ProjectBootstrap:
         # Create analysis options
         self._create_analysis_options()
 
-        # Create GitHub Actions CI
-        self._create_github_actions()
+        # Create CI/CD workflows and configuration
+        self._create_cicd()
 
         # Add dependencies
         self._add_dependencies()
@@ -205,35 +207,10 @@ linter:
 
         console.print("  ✅ Analysis options created")
 
-    def _create_github_actions(self) -> None:
-        """Create GitHub Actions CI workflow."""
-        workflows_dir = self.config.project_path / ".github" / "workflows"
-        workflows_dir.mkdir(parents=True, exist_ok=True)
-
-        ci_content = """name: Flutter CI
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-
-jobs:
-  build:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 'stable'
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
-"""
-
-        with open(workflows_dir / "flutter-ci.yml", "w") as f:
-            f.write(ci_content)
-
-        console.print("  ✅ GitHub Actions CI created")
+    def _create_cicd(self) -> None:
+        """Create CI/CD workflows and configuration."""
+        cicd_generator = CicdGenerator(self.config)
+        cicd_generator.generate_cicd()
 
     def _add_dependencies(self) -> None:
         """Add required dependencies to the project."""
@@ -251,7 +228,7 @@ jobs:
                 capture_output=True,
             )
 
-            # Add dev dependencies
+            # Add flutter_lints as dev dependency
             subprocess.run(
                 [
                     str(self.flutter_root / "bin" / "flutter"),
@@ -259,17 +236,56 @@ jobs:
                     "add",
                     "--dev",
                     "flutter_lints",
-                    "integration_test",
                 ],
                 cwd=self.config.project_path,
                 check=False,
                 capture_output=True,
             )
 
+            # Add integration_test as SDK dependency by directly editing pubspec.yaml
+            # flutter pub add doesn't correctly handle SDK dependencies
+            self._add_integration_test_sdk_dependency()
+
             console.print("  ✅ Dependencies added")
 
         except Exception as e:
             console.print(f"  ⚠️  Dependency addition warning: {e}")
+
+    def _add_integration_test_sdk_dependency(self) -> None:
+        """Add integration_test as an SDK dependency to pubspec.yaml."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            console.print("  ⚠️  pubspec.yaml not found, skipping integration_test")
+            return
+
+        try:
+            # Read pubspec.yaml
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+
+            # Ensure dev_dependencies section exists
+            if "dev_dependencies" not in pubspec:
+                pubspec["dev_dependencies"] = {}
+
+            # Check if integration_test already exists
+            existing = pubspec["dev_dependencies"].get("integration_test")
+            if (
+                existing
+                and isinstance(existing, dict)
+                and existing.get("sdk") == "flutter"
+            ):
+                # Already correctly configured, skip
+                return
+
+            # Add or update integration_test with SDK specification
+            pubspec["dev_dependencies"]["integration_test"] = {"sdk": "flutter"}
+
+            # Write back to pubspec.yaml
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add integration_test SDK dependency: {e}")
 
     def _create_environment_support(self) -> None:
         """Create environment variable support."""

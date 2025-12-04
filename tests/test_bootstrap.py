@@ -56,7 +56,7 @@ class TestProjectBootstrap:
             with patch.object(bootstrap, "_create_makefile"):
                 with patch.object(bootstrap, "_create_test_structure"):
                     with patch.object(bootstrap, "_create_analysis_options"):
-                        with patch.object(bootstrap, "_create_github_actions"):
+                        with patch.object(bootstrap, "_create_cicd"):
                             with patch.object(bootstrap, "_add_dependencies"):
                                 with patch.object(
                                     bootstrap, "_create_environment_support"
@@ -128,18 +128,18 @@ class TestProjectBootstrap:
             content = analysis_file.read_text()
             assert "flutter_lints" in content
 
-    def test_create_github_actions(self, config: Config) -> None:
-        """Test creating GitHub Actions workflow."""
+    def test_create_cicd(self, config: Config) -> None:
+        """Test creating CI/CD workflows and configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
             bootstrap = ProjectBootstrap(config)
-            bootstrap._create_github_actions()
-            workflow_file = (
-                config.project_path / ".github" / "workflows" / "flutter-ci.yml"
-            )
-            assert workflow_file.exists()
-            content = workflow_file.read_text()
-            assert "Flutter CI" in content
+            bootstrap._create_cicd()
+            workflows_dir = config.project_path / ".github" / "workflows"
+            assert workflows_dir.exists()
+            # Check that at least one workflow file exists
+            workflow_files = list(workflows_dir.glob("*.yml"))
+            assert len(workflow_files) > 0
 
     def test_add_dependencies(
         self, bootstrap: ProjectBootstrap, config: Config
