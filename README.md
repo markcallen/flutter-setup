@@ -1,12 +1,12 @@
 # Flutter Setup CLI
 
-A modern Python CLI tool for setting up complete Flutter development environments on macOS. This tool automates the entire process of installing Flutter SDK, configuring development tools, and bootstrapping new Flutter projects with industry best practices.
+A modern Python CLI tool for setting up complete Flutter development environments on macOS and Linux. This tool automates Flutter SDK setup, prerequisite checks, and project bootstrapping with practical defaults.
 
 ## Features
 
 - 🚀 **Automated Setup**: Complete Flutter development environment setup in minutes
 - 🦋 **Flutter SDK Management**: Install, update, and manage Flutter SDK with multiple channels
-- 🛠️ **Prerequisites Installation**: Automatically install Xcode tools, Homebrew, and platform-specific dependencies
+- 🛠️ **Prerequisites Installation**: Platform-aware prerequisite checks and installation flows for macOS and Linux
 - 📱 **Multi-Platform Support**: Create projects for iOS, Android, macOS, Linux, Windows, and Web
 - 🔧 **Development Environment**: Pre-configured VS Code/Cursor settings, testing framework, and CI/CD
 - 🎯 **Best Practices**: Industry-standard project structure with linting, testing, and analysis tools
@@ -27,6 +27,15 @@ uv pip install -e .
 
 # Or install directly from GitHub (when published)
 uv pip install git+https://github.com/markcallen/flutter-setup.git
+```
+
+### Linux Prerequisites (Ubuntu/Debian)
+
+For Linux hosts, ensure APT is available and `sudo` is configured:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git curl unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config
 ```
 
 ### Configuration Setup
@@ -100,11 +109,10 @@ flutter-setup setup MyApp ios android web
 ## What Gets Set Up
 
 ### 1. System Prerequisites
-- ✅ Xcode Command Line Tools
-- ✅ Homebrew package manager
-- ✅ Git, CocoaPods, and platform-specific tools
-- ✅ Android development tools (if Android platform selected)
-- ✅ iOS development tools (if iOS platform selected)
+- ✅ macOS: Xcode Command Line Tools + Homebrew + CocoaPods
+- ✅ Linux (Ubuntu/Debian): APT-managed packages (`git`, `curl`, `unzip`, `xz-utils`, `zip`, `libglu1-mesa`, `clang`, `cmake`, `ninja-build`, `pkg-config`)
+- ✅ Android development tools when Android platform is selected
+- ✅ iOS development tools only on macOS when iOS platform is selected
 
 ### 2. Flutter SDK
 - ✅ Flutter SDK installation/update
@@ -205,6 +213,16 @@ The package is built with modern Python best practices:
 
 - Python 3.12+
 - uv package manager
+
+### Supported Hosts
+
+- macOS (Darwin)
+- Linux (Ubuntu/Debian via APT)
+
+### Known Limitations
+
+- Fedora/DNF support is planned but not yet implemented.
+- iOS setup is not available on Linux hosts.
 
 ### Setup Development Environment
 
