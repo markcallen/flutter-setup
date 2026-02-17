@@ -296,6 +296,12 @@
 - [ ] Add comprehensive input validation
 - [ ] Improve code documentation and docstrings
 - [ ] Set up pre-commit hooks for code quality
+- [ ] Linux enablement follow-ups:
+  - [ ] Add Fedora/RHEL (`dnf`) prerequisite support
+  - [ ] Add distro detection and package-manager abstraction tests
+  - [ ] Improve shell profile strategy for non-bash Linux shells
+  - [ ] Add explicit Linux troubleshooting guidance for `flutter doctor` failures
+  - [ ] Add CI scenario that exercises Linux prerequisite checks in dry-run mode
 
 ---
 
