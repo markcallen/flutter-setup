@@ -22,6 +22,7 @@ from .config_manager import ConfigManager
 from .exceptions import FlutterSetupError
 from .prerequisites import PrerequisitesManager
 from .flutter_manager import FlutterManager
+from .platform import detect_runtime_platform
 
 console = Console()
 
@@ -59,7 +60,7 @@ def print_banner() -> None:
     """Print the application banner."""
     banner = """
 [bold blue]Flutter Development Environment Setup[/bold blue]
-[dim]Automated Flutter development environment setup for macOS[/dim]
+[dim]Automated Flutter development environment setup for macOS and Linux[/dim]
     """
     console.print(Panel(banner, border_style="blue"))
 
@@ -232,10 +233,13 @@ def check_command(verbose: bool) -> None:
         channel = file_config.get("flutter", {}).get("channel", "stable")
 
         # Create minimal config for checking (we don't need project details)
+        host_platform = detect_runtime_platform()
+        default_platform = "ios" if host_platform == "darwin" else "linux"
+
         # Use dummy values for required fields
         config = Config(
             project_name="dummy",
-            platforms=["ios"],  # Default platform for checks
+            platforms=[default_platform],
             org="com.example",
             channel=channel,
             output_dir=Path("."),

@@ -42,7 +42,7 @@ class TestProjectBootstrap:
         """Test ProjectBootstrap initialization."""
         assert bootstrap.config == config
         assert bootstrap.home == Path.home()
-        assert bootstrap.flutter_root == Path.home() / "development" / "flutter"
+        assert bootstrap.flutter_root == config.flutter_location
 
     def test_bootstrap_project_dry_run(self, config: Config) -> None:
         """Test bootstrap_project in dry run mode."""

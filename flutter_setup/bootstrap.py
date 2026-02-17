@@ -19,7 +19,7 @@ class ProjectBootstrap:
         """Initialize ProjectBootstrap."""
         self.config = config
         self.home = Path.home()
-        self.flutter_root = self.home / "development" / "flutter"
+        self.flutter_root = config.flutter_location
 
     def bootstrap_project(self) -> None:
         """Bootstrap the development environment."""
