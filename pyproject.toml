@@ -5,7 +5,7 @@ description = "Flutter development environment setup CLI tool for macOS"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "click>=8.1.0",
+    "click>=8.3.2",
     "pyyaml>=6.0.0",
     "rich>=13.0.0",
     "requests>=2.31.0",
