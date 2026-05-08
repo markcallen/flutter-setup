@@ -4,6 +4,10 @@ version = "2.0.0"
 description = "Flutter development environment setup CLI tool for macOS and Linux"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Mark Callen", email = "mark@example.com" }
+]
 dependencies = [
     "click>=8.1.0",
     "pyyaml>=6.0.0",

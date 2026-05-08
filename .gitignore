@@ -12,3 +12,4 @@ wheels/
 # code coverage
 .coverage
 coverage.xml
+.ballast/
