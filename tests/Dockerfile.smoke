@@ -1,0 +1,42 @@
+# Use Ubuntu 24.04 to get Python 3.12+
+FROM ubuntu:24.04
+
+# Avoid interactive prompts during apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install essential bootstrap tools
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-full \
+    sudo \
+    git \
+    curl \
+    xz-utils \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN apt-get update && apt-get install -y curl ca-certificates && \
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
+# Create a non-root developer user
+RUN useradd -m -s /bin/bash developer && \
+    echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Set up working directory
+WORKDIR /app
+RUN chown developer:developer /app
+
+# Switch to developer user
+USER developer
+
+# Copy the project files
+COPY --chown=developer:developer . .
+
+# Set up PATH to include local bin and uv
+ENV PATH="/home/developer/.local/bin:$PATH"
+
+# Entrypoint will be the smoke test script
+ENTRYPOINT ["/bin/bash", "tests/smoke_test.sh"]

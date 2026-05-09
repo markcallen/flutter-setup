@@ -4,7 +4,7 @@ version = "2.0.0"
 description = "Flutter development environment setup CLI tool for macOS and Linux"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Mark Callen", email = "mark@example.com" }
 ]
@@ -32,6 +32,9 @@ dev = [
     "pytest-mock>=3.12.0",
     "types-pyyaml>=6.0.12.20250915",
 ]
+
+[tool.setuptools.packages.find]
+include = ["flutter_setup*"]
 
 [tool.black]
 line-length = 88

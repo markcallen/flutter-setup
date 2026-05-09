@@ -9,7 +9,5 @@ wheels/
 # Virtual environments
 .venv
 
-# code coverage
-.coverage
-coverage.xml
-.ballast/
+# Smoke test artifacts
+smoke_app/

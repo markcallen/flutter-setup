@@ -222,14 +222,14 @@
   - [ ] Project creation validation tests
   - [ ] Error handling tests
   - [ ] Mock network operations
-- [ ] Integration tests
-  - [ ] End-to-end setup tests
-  - [ ] Test on different macOS versions
-  - [ ] Validate created projects work correctly
-- [ ] CI/CD pipeline for the script
-  - [ ] Automated testing on multiple macOS versions
-  - [ ] Automated linting and code quality checks
-  - [ ] Test matrix for different configurations
+- [x] Integration tests
+  - [x] End-to-end setup tests (Tiered Docker Smoke Tests)
+  - [x] Validate created projects work correctly (Tiered Docker Smoke Tests)
+- [x] CI/CD pipeline for the script
+  - [x] Automated testing on multiple macOS versions
+  - [x] Automated linting and code quality checks
+  - [x] Test matrix for different configurations
+  - [x] Tiered Smoke Testing (Full E2E + Fast Warm SDK) via GHCR
 
 ### Documentation & Help
 - [ ] Comprehensive `--help` command
