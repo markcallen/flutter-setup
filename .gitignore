@@ -11,3 +11,6 @@ wheels/
 
 # Smoke test artifacts
 smoke_app/
+
+# ballast
+.ballast
