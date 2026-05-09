@@ -35,7 +35,7 @@ For Linux hosts, ensure APT is available and `sudo` is configured:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git curl unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config
+sudo apt-get install -y git curl unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config libgtk-3-dev libayatana-appindicator3-dev liblzma-dev openjdk-17-jdk
 ```
 
 ### Configuration Setup
@@ -110,7 +110,7 @@ flutter-setup setup MyApp ios android web
 
 ### 1. System Prerequisites
 - ✅ macOS: Xcode Command Line Tools + Homebrew + CocoaPods
-- ✅ Linux (Ubuntu/Debian): APT-managed packages (`git`, `curl`, `unzip`, `xz-utils`, `zip`, `libglu1-mesa`, `clang`, `cmake`, `ninja-build`, `pkg-config`)
+- ✅ Linux (Ubuntu/Debian): APT-managed packages (`git`, `curl`, `unzip`, `xz-utils`, `zip`, `libglu1-mesa`, `clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `liblzma-dev`, `openjdk-17-jdk`)
 - ✅ Android development tools when Android platform is selected
 - ✅ iOS development tools only on macOS when iOS platform is selected
 
@@ -291,33 +291,6 @@ This Python CLI package provides several advantages over the original bash scrip
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## Support
-
-For issues and questions:
-- Create an issue on GitHub
-- Check the documentation
-- Review the PRD.md for detailed requirements
-
----
-
-**Built with ❤️ for the Flutter community**
- | Manual | Standard Python package |
-| **Distribution** | Manual | PyPI ready |
-| **Maintenance** | Harder | Easier with Python tools |
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
-
-## License
-
-[Your License Here]
 
 ## Support
 

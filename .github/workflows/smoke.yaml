@@ -6,6 +6,8 @@ on:
       - "flutter_setup/**"
       - "tests/**"
       - "pyproject.toml"
+      - "docker-compose.smoke-*.yaml"
+      - "Dockerfile"
       - ".github/workflows/smoke.yaml"
   push:
     branches: ["main"]
@@ -13,6 +15,8 @@ on:
       - "flutter_setup/**"
       - "tests/**"
       - "pyproject.toml"
+      - "docker-compose.smoke-*.yaml"
+      - "Dockerfile"
       - ".github/workflows/smoke.yaml"
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sunday
@@ -57,9 +61,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Log in to the Container registry
+        if: github.event_name == 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run Fast Smoke Test
         run: |
-          docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --build --exit-code-from smoke-test-fast
+          # On PRs, we pull the image and run without --build to use the GHCR 'warm' SDK
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
+          else
+            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --build --exit-code-from smoke-test-fast
+          fi
 
   smoke-test-full:
     runs-on: ubuntu-latest

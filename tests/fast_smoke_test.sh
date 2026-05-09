@@ -2,11 +2,10 @@
 set -e
 echo "🚀 Starting Fast Smoke Test (Warm SDK)"
 
-# Fix permissions for the mounted volume
-sudo chown -R developer:developer /app
-
-# Install the package
-# We remove existing egg-info to avoid permission issues
+# Fix permissions safely
+# Instead of recursive chown of /app (which could be the whole host repo),
+# we ensure the developer user can write to the current directory for build artifacts
+sudo chown developer:developer .
 rm -rf flutter_setup.egg-info
 sudo uv pip install -e . --system --break-system-packages
 

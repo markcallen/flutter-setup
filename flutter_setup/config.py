@@ -42,10 +42,13 @@ class Config:
         if not self.platforms:
             raise ValueError("At least one platform must be specified")
 
+        # Basic normalization
+        self.platforms = [p.strip().lower() for p in self.platforms if p.strip()]
+
         # Validate platforms
         valid_platforms = {"ios", "android", "macos", "linux", "windows", "web"}
         for platform in self.platforms:
-            if platform.lower() not in valid_platforms:
+            if platform not in valid_platforms:
                 raise ValueError(f"Invalid platform: {platform}")
 
         # Validate template-specific options
