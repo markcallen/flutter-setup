@@ -255,3 +255,21 @@ class TestConfig:
             flutter_location=Path.home() / "development" / "flutter",
         )
         assert len(config.platforms) == 6
+
+    def test_platforms_normalization(self) -> None:
+        """Test that platform names are normalized to lowercase."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["iOS", "Android", "Web"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+        )
+        assert config.platforms == ["ios", "android", "web"]

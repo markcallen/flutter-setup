@@ -71,13 +71,13 @@ jobs:
 
       - name: Run Fast Smoke Test
         run: |
-          # On PRs, we pull the image and run without --build to use the GHCR 'warm' SDK
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
-          else
-            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --build --exit-code-from smoke-test-fast
-          fi
+          # Try to pull the pre-built image to speed up the run
+          echo "Attempting to pull base image..."
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || echo "Base image not found in registry, will build locally."
+
+          # On PRs, we prefer using the image if it exists to keep it fast.
+          # If it doesn't exist, docker compose will build it because we have a 'build' section.
+          docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
 
   smoke-test-full:
     runs-on: ubuntu-latest
