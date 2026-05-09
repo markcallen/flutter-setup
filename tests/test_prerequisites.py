@@ -72,7 +72,9 @@ class TestLinuxPrerequisites:
     def test_unsupported_package_manager(self, config: Config) -> None:
         """Test error when APT is missing."""
         with patch("shutil.which", return_value=None):
-            with pytest.raises(PrerequisitesError, match="Unsupported Linux distribution"):
+            with pytest.raises(
+                PrerequisitesError, match="Unsupported Linux distribution"
+            ):
                 LinuxPrerequisites(config)
 
     def test_check_only_all_installed(self, config: Config) -> None:
