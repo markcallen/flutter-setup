@@ -1,6 +1,5 @@
 """Tests for the platform module."""
 
-import sys
 from unittest.mock import patch
 
 from flutter_setup.platform import detect_runtime_platform
