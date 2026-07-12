@@ -153,6 +153,7 @@ class TestFlutterSetup:
             setup._show_next_steps()
             panel = mock_print.call_args_list[-1][0][0]
             assert "source ~/.bashrc" in str(panel.renderable)
+            assert "source ~/.zshrc" in str(panel.renderable)
 
     def test_show_next_steps_macos_profile(self, setup: FlutterSetup) -> None:
         """Test macOS-specific shell profile guidance."""
@@ -161,3 +162,4 @@ class TestFlutterSetup:
             setup._show_next_steps()
             panel = mock_print.call_args_list[-1][0][0]
             assert "source ~/.zprofile" in str(panel.renderable)
+            assert "source ~/.zshrc" in str(panel.renderable)

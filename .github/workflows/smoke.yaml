@@ -29,6 +29,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: markcallen/flutter-setup-sdk-base
+  SDK_IMAGE_TAG: flutter-stable-ubuntu24.04
 
 jobs:
   build-base:
@@ -55,7 +56,9 @@ jobs:
           context: .
           file: tests/Dockerfile.sdk-base
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SDK_IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
   smoke-test-fast:
     runs-on: ubuntu-latest
@@ -77,9 +80,10 @@ jobs:
 
       - name: Run Fast Smoke Test
         run: |
+          export SMOKE_SDK_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SDK_IMAGE_TAG }}"
           # Try to pull the pre-built image to speed up the run
-          echo "Attempting to pull base image..."
-          if docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; then
+          echo "Attempting to pull base image: $SMOKE_SDK_IMAGE"
+          if docker pull "$SMOKE_SDK_IMAGE"; then
             echo "Base image pulled successfully."
             docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
           else

@@ -1,8 +1,7 @@
 FROM python:3.12-slim
 
 # Install uv.
-RUN apt-get update && apt-get install -y curl ca-certificates && \
-    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /uvx /bin/
 
 WORKDIR /app
 

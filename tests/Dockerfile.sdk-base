@@ -9,9 +9,8 @@ RUN apt-get update && apt-get install -y \
     libayatana-appindicator3-dev liblzma-dev openjdk-17-jdk \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN apt-get update && apt-get install -y curl ca-certificates && \
-    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+# Install a pinned uv binary.
+COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /uvx /usr/local/bin/
 
 # Setup user
 RUN useradd -m -s /bin/bash developer && \

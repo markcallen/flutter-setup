@@ -153,7 +153,16 @@ class FlutterSetup:
         """Display next steps for the user."""
         console.print("\n[bold green]🎉 Setup completed successfully![/bold green]")
 
-        shell_profile = "~/.zprofile" if self.platform == "darwin" else "~/.bashrc"
+        if self.platform == "darwin":
+            shell_profile_steps = (
+                "   [code]source ~/.zprofile[/code]    # zsh login shells\n"
+                "   [code]source ~/.zshrc[/code]       # zsh interactive shells"
+            )
+        else:
+            shell_profile_steps = (
+                "   [code]source ~/.bashrc[/code]      # bash\n"
+                "   [code]source ~/.zshrc[/code]       # zsh"
+            )
         ios_run_step = (
             "   [code]make run_ios[/code]       # runs on iOS simulator\n"
             if self.platform == "darwin"
@@ -164,7 +173,7 @@ class FlutterSetup:
 [bold]Next steps:[/bold]
 
 1. [blue]Activate Flutter in your shell:[/blue]
-   [code]source {shell_profile}[/code]
+{shell_profile_steps}
 
 2. [blue]Navigate to your project:[/blue]
    [code]cd "{self.config.project_path}"[/code]

@@ -1,6 +1,6 @@
 services:
   smoke-test-fast:
-    image: ghcr.io/markcallen/flutter-setup-sdk-base:latest
+    image: ${SMOKE_SDK_IMAGE:-ghcr.io/markcallen/flutter-setup-sdk-base:flutter-stable-ubuntu24.04}
     container_name: flutter-setup-smoke-fast
     volumes:
       - .:/app
