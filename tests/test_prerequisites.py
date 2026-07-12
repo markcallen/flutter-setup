@@ -147,6 +147,30 @@ class TestLinuxPrerequisites:
 class TestMacOSPrerequisites:
     """Test macOS prerequisites logic."""
 
+    def test_check_and_install_dry_run(self, config: Config) -> None:
+        config.dry_run = True
+        manager = MacOSPrerequisites(config)
+        manager.check_and_install()
+
+    def test_check_and_install_runs_all_steps(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch.object(manager, "_check_xcode_tools") as mock_xcode:
+            with patch.object(manager, "_check_homebrew") as mock_homebrew:
+                with patch.object(manager, "_install_packages") as mock_packages:
+                    with patch.object(manager, "_setup_platform_tools") as mock_tools:
+                        manager.check_and_install()
+
+        mock_xcode.assert_called_once()
+        mock_homebrew.assert_called_once()
+        mock_packages.assert_called_once()
+        mock_tools.assert_called_once()
+
+    def test_check_xcode_tools_found(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            manager._check_xcode_tools()
+
     def test_check_only_all_pass(self, config: Config) -> None:
         manager = MacOSPrerequisites(config)
         with patch("subprocess.run") as mock_run:
@@ -159,3 +183,111 @@ class TestMacOSPrerequisites:
             mock_run.side_effect = [Mock(returncode=1), Mock(returncode=0)]
             with pytest.raises(PrerequisitesError):
                 manager._check_xcode_tools()
+
+    def test_check_xcode_tools_command_error(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "xcode-select")
+            with pytest.raises(PrerequisitesError, match="Failed to check Xcode"):
+                manager._check_xcode_tools()
+
+    def test_check_homebrew_found(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            with patch.object(manager, "_ensure_homebrew_path") as mock_path:
+                manager._check_homebrew()
+                mock_path.assert_called_once()
+
+    def test_check_homebrew_installs_when_missing(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=1)
+            with patch.object(manager, "_install_homebrew") as mock_install:
+                manager._check_homebrew()
+                mock_install.assert_called_once()
+
+    def test_install_homebrew_success(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            with patch.object(manager, "_ensure_homebrew_path") as mock_path:
+                manager._install_homebrew()
+                mock_path.assert_called_once()
+
+    def test_install_homebrew_failure(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "bash")
+            with pytest.raises(PrerequisitesError, match="Failed to install Homebrew"):
+                manager._install_homebrew()
+
+    def test_ensure_homebrew_path_when_apple_silicon_brew_exists(
+        self, config: Config
+    ) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("subprocess.run") as mock_run:
+                manager._ensure_homebrew_path()
+                mock_run.assert_called_once()
+
+    def test_install_packages_success(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            manager._install_packages()
+            assert mock_run.call_count == 2
+
+    def test_install_packages_already_installed(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                subprocess.CalledProcessError(1, "brew"),
+                Mock(returncode=0),
+                subprocess.CalledProcessError(1, "brew"),
+                Mock(returncode=0),
+            ]
+            manager._install_packages()
+
+    def test_install_packages_failure(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                subprocess.CalledProcessError(1, "brew"),
+                Mock(returncode=1),
+            ]
+            with pytest.raises(PrerequisitesError, match="Failed to install git"):
+                manager._install_packages()
+
+    def test_setup_platform_tools(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch.object(manager, "_setup_android_tools") as mock_android:
+            with patch.object(manager, "_setup_ios_tools") as mock_ios:
+                manager._setup_platform_tools()
+
+        mock_android.assert_called_once()
+        mock_ios.assert_called_once()
+
+    def test_setup_android_tools_handles_install_failures(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                subprocess.CalledProcessError(1, "brew"),
+                Mock(returncode=1),
+                subprocess.CalledProcessError(1, "brew"),
+                Mock(returncode=0),
+            ]
+            manager._setup_android_tools()
+
+    def test_setup_ios_tools(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            manager._setup_ios_tools()
+            mock_run.assert_called_once()
+
+    def test_check_only_reports_missing_items(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=1)
+            assert manager.check_only() is False
