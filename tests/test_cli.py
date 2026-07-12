@@ -24,7 +24,20 @@ class TestCLI:
             mock_manager_class.return_value = mock_manager
             mock_manager.config_file.exists.return_value = False
             mock_manager.detect_flutter_location.return_value = Path("/flutter")
-            with patch("click.prompt", side_effect=["/flutter", "stable", "com.test"]):
+            with patch(
+                "click.prompt",
+                side_effect=[
+                    "/flutter",
+                    "stable",
+                    "com.test",
+                    "basic",
+                    "none",
+                    "standard",
+                    "none",
+                    "none",
+                    "none",
+                ],
+            ):
                 result = runner.invoke(cli, ["init"])
                 assert result.exit_code == 0
 
@@ -39,7 +52,20 @@ class TestCLI:
                 "flutter": {"location": "/flutter", "channel": "stable"},
                 "project": {"org": "com.test"},
             }
-            with patch("click.prompt", side_effect=["/flutter", "stable", "com.test"]):
+            with patch(
+                "click.prompt",
+                side_effect=[
+                    "/flutter",
+                    "stable",
+                    "com.test",
+                    "clean",
+                    "sqlite",
+                    "mocktail",
+                    "firebase",
+                    "firestore",
+                    "firebase",
+                ],
+            ):
                 result = runner.invoke(cli, ["init"])
                 assert result.exit_code == 0
 
@@ -98,8 +124,35 @@ class TestCLI:
             with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
                 mock_setup = Mock()
                 mock_setup_class.return_value = mock_setup
-                result = runner.invoke(cli, ["setup", "TestApp", "ios", "android"])
+                result = runner.invoke(
+                    cli,
+                    [
+                        "setup",
+                        "TestApp",
+                        "ios",
+                        "android",
+                        "--architecture",
+                        "clean",
+                        "--database",
+                        "sqlite",
+                        "--testing",
+                        "mocktail",
+                        "--auth-provider",
+                        "firebase",
+                        "--cloud-database",
+                        "firestore",
+                        "--notifications-provider",
+                        "firebase",
+                    ],
+                )
                 assert result.exit_code == 0
+                config = mock_setup_class.call_args.args[0]
+                assert config.architecture == "clean"
+                assert config.database == "sqlite"
+                assert config.testing == "mocktail"
+                assert config.auth_provider == "firebase"
+                assert config.cloud_database == "firestore"
+                assert config.notifications_provider == "firebase"
 
     def test_setup_command_no_platforms(self) -> None:
         """Test setup_command with no platforms."""

@@ -1,6 +1,7 @@
 """Tests for the flutter_manager module."""
 
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, Mock, mock_open, patch
@@ -43,7 +44,7 @@ class TestFlutterManager:
         assert manager.config == config
         assert manager.home == Path.home()
         assert manager.flutter_root == config.flutter_location
-        assert manager.zprofile == Path.home() / ".zprofile"
+        assert len(manager.path_profiles) >= 1
 
     def test_ensure_flutter_dry_run(self, config: Config) -> None:
         """Test ensure_flutter in dry run mode."""
@@ -147,23 +148,38 @@ class TestFlutterManager:
             manager._handle_diverged_branches()  # Should not raise
 
     def test_ensure_flutter_path_new_file(self, manager: FlutterManager) -> None:
-        """Test ensuring Flutter PATH in new .zprofile."""
-        mock_zprofile = MagicMock()
-        mock_zprofile.exists.return_value = False
-        manager.zprofile = mock_zprofile
+        """Test ensuring Flutter PATH in new profile file."""
+        mock_profile = MagicMock()
+        mock_profile.exists.return_value = False
+        mock_profile.name = ".bashrc"
+        manager.path_profiles = [mock_profile]
         with patch("builtins.open", mock_open()) as mock_file:
             manager._ensure_flutter_path()
             mock_file.assert_called()
 
     def test_ensure_flutter_path_existing(self, manager: FlutterManager) -> None:
         """Test ensuring Flutter PATH when already configured."""
-        mock_zprofile = MagicMock()
-        mock_zprofile.exists.return_value = True
-        manager.zprofile = mock_zprofile
+        mock_profile = MagicMock()
+        mock_profile.exists.return_value = True
+        mock_profile.name = ".bashrc"
+        manager.path_profiles = [mock_profile]
         with patch(
             "builtins.open", mock_open(read_data='export PATH="/flutter/bin:$PATH"')
         ):
             manager._ensure_flutter_path()  # Should not raise
+
+    def test_normalize_flutter_bin_path_home_forms(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test normalizing common shell home path forms."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager.home = Path(tmpdir)
+            assert manager._normalize_flutter_bin_path("$HOME/flutter/bin") == str(
+                Path(tmpdir) / "flutter" / "bin"
+            )
+            assert manager._normalize_flutter_bin_path("~/flutter/bin") == str(
+                Path(tmpdir) / "flutter" / "bin"
+            )
 
     def test_run_flutter_doctor_success(self, manager: FlutterManager) -> None:
         """Test running Flutter doctor successfully."""
@@ -201,32 +217,79 @@ class TestFlutterManager:
 
     def test_check_only_flutter_installed(self, manager: FlutterManager) -> None:
         """Test check_only when Flutter is installed."""
-        mock_root = MagicMock()
-        mock_root.exists.return_value = True
-        mock_git = MagicMock()
-        mock_git.exists.return_value = True
-        mock_bin_dir = MagicMock()
-        mock_bin_dir.exists.return_value = True
-        mock_bin = MagicMock()
-        mock_bin.exists.return_value = True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            flutter_root = Path(tmpdir) / "flutter"
+            (flutter_root / ".git").mkdir(parents=True)
+            (flutter_root / "bin").mkdir(parents=True)
+            (flutter_root / "bin" / "flutter").touch()
+            manager.flutter_root = flutter_root
 
-        def truediv_side_effect(path: Any) -> MagicMock:
-            if str(path) == ".git":
-                return mock_git
-            elif str(path) == "bin":
-                return mock_bin_dir
-            elif str(path) == "bin/flutter" or str(path) == "flutter":
-                return mock_bin
-            return MagicMock()
+            mock_profile = MagicMock()
+            mock_profile.exists.return_value = True
+            mock_profile.name = ".bashrc"
+            manager.path_profiles = [mock_profile]
 
-        mock_root.__truediv__ = MagicMock(side_effect=truediv_side_effect)
-        manager.flutter_root = mock_root
-        mock_zprofile = MagicMock()
-        mock_zprofile.exists.return_value = True
-        manager.zprofile = mock_zprofile
-        with patch(
-            "builtins.open", mock_open(read_data='export PATH="/flutter/bin:$PATH"')
-        ):
+            with patch(
+                "builtins.open",
+                mock_open(read_data=f'export PATH="{flutter_root}/bin:$PATH"'),
+            ):
+                with patch("subprocess.run") as mock_run:
+                    # Mock the git rev-list command to return proper output
+                    def run_side_effect(*args: Any, **kwargs: Any) -> Mock:
+                        if "rev-list" in args[0]:
+                            result = Mock(returncode=0, stdout="0 0\n", stderr="")
+                            return result
+                        return Mock(returncode=0, stdout="", stderr="")
+
+                    mock_run.side_effect = run_side_effect
+                    assert manager.check_only() is True
+
+    def test_check_only_accepts_home_path_forms(self, manager: FlutterManager) -> None:
+        """Test check_only accepts $HOME and tilde Flutter PATH entries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            flutter_root = home / "development" / "flutter"
+            (flutter_root / ".git").mkdir(parents=True)
+            (flutter_root / "bin").mkdir(parents=True)
+            (flutter_root / "bin" / "flutter").touch()
+            manager.home = home
+            manager.flutter_root = flutter_root
+
+            mock_profile = MagicMock()
+            mock_profile.exists.return_value = True
+            mock_profile.name = ".bashrc"
+            manager.path_profiles = [mock_profile]
+
+            with patch(
+                "builtins.open",
+                mock_open(
+                    read_data='export PATH="$HOME/development/flutter/bin:$PATH"'
+                ),
+            ):
+                with patch("subprocess.run") as mock_run:
+
+                    def run_side_effect(*args: Any, **kwargs: Any) -> Mock:
+                        if "rev-list" in args[0]:
+                            return Mock(returncode=0, stdout="0 0\n", stderr="")
+                        return Mock(returncode=0, stdout="", stderr="")
+
+                    mock_run.side_effect = run_side_effect
+                    assert manager.check_only() is True
+
+    def test_check_only_path_not_configured(self, manager: FlutterManager) -> None:
+        """Test check_only when PATH is not configured."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            flutter_root = Path(tmpdir) / "flutter"
+            (flutter_root / ".git").mkdir(parents=True)
+            (flutter_root / "bin").mkdir(parents=True)
+            (flutter_root / "bin" / "flutter").touch()
+            manager.flutter_root = flutter_root
+
+            mock_profile = MagicMock()
+            mock_profile.exists.return_value = False
+            mock_profile.name = ".bashrc"
+            manager.path_profiles = [mock_profile]
+
             with patch("subprocess.run") as mock_run:
                 # Mock the git rev-list command to return proper output
                 def run_side_effect(*args: Any, **kwargs: Any) -> Mock:
@@ -236,42 +299,4 @@ class TestFlutterManager:
                     return Mock(returncode=0, stdout="", stderr="")
 
                 mock_run.side_effect = run_side_effect
-                manager.check_only()
-                # Result depends on all checks passing
-
-    def test_check_only_path_not_configured(self, manager: FlutterManager) -> None:
-        """Test check_only when PATH is not configured."""
-        mock_root = MagicMock()
-        mock_root.exists.return_value = True
-        mock_git = MagicMock()
-        mock_git.exists.return_value = True
-        mock_bin_dir = MagicMock()
-        mock_bin_dir.exists.return_value = True
-        mock_bin = MagicMock()
-        mock_bin.exists.return_value = True
-
-        def truediv_side_effect(path: Any) -> MagicMock:
-            if str(path) == ".git":
-                return mock_git
-            elif str(path) == "bin":
-                return mock_bin_dir
-            elif str(path) == "bin/flutter" or str(path) == "flutter":
-                return mock_bin
-            return MagicMock()
-
-        mock_root.__truediv__ = MagicMock(side_effect=truediv_side_effect)
-        manager.flutter_root = mock_root
-        mock_zprofile = MagicMock()
-        mock_zprofile.exists.return_value = False
-        manager.zprofile = mock_zprofile
-        with patch("subprocess.run") as mock_run:
-            # Mock the git rev-list command to return proper output
-            def run_side_effect(*args: Any, **kwargs: Any) -> Mock:
-                if "rev-list" in args[0]:
-                    result = Mock(returncode=0, stdout="0 0\n", stderr="")
-                    return result
-                return Mock(returncode=0, stdout="", stderr="")
-
-            mock_run.side_effect = run_side_effect
-            manager.check_only()
-            # Should still return True if Flutter is installed
+                assert manager.check_only() is False

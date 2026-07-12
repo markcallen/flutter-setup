@@ -1,0 +1,31 @@
+{
+  "targets": [
+    "gemini"
+  ],
+  "agents": [
+    "local-dev",
+    "docs",
+    "cicd",
+    "observability",
+    "publishing",
+    "git-hooks",
+    "linting",
+    "logging",
+    "testing",
+    "tasks"
+  ],
+  "ballastVersion": "5.9.3",
+  "languages": [
+    "python",
+    "typescript"
+  ],
+  "paths": {
+    "typescript": [
+      "."
+    ],
+    "python": [
+      "."
+    ]
+  },
+  "taskSystem": "github"
+}
