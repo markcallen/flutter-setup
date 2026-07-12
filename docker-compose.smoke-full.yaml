@@ -1,0 +1,6 @@
+services:
+  smoke-test-full:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.smoke
+    container_name: flutter-setup-smoke-full

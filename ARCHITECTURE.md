@@ -17,14 +17,14 @@ This document provides a comprehensive overview of the Flutter Setup system arch
 
 ## System Overview
 
-Flutter Setup is a Python-based CLI tool that automates the complete Flutter development environment setup on macOS. It orchestrates the installation of prerequisites, Flutter SDK, project creation, and development environment bootstrapping.
+Flutter Setup is a Python-based CLI tool that automates Flutter development environment setup on macOS and Linux. It orchestrates prerequisite checks, Flutter SDK management, project creation, and development environment bootstrapping.
 
 ### Key Characteristics
 
 - **Language**: Python 3.12+
 - **CLI Framework**: Click
 - **UI/Output**: Rich (for colored terminal output and progress bars)
-- **Target Platform**: macOS (primary)
+- **Target Platform**: macOS and Linux (Ubuntu/Debian in current Linux phase)
 - **Architecture**: Modular, object-oriented design
 
 ---
@@ -322,14 +322,13 @@ flowchart LR
 
 ### 3. Prerequisites Manager (`prerequisites.py`)
 
-**Purpose**: Manages installation and verification of system prerequisites.
+**Purpose**: Routes prerequisite checks/installation to platform-specific handlers.
 
 **Key Responsibilities**:
-- Check for Xcode Command Line Tools
-- Verify/install Homebrew package manager
-- Install required packages (Git, CocoaPods)
-- Setup platform-specific tools (Android, iOS)
-- Configure system paths
+- Detect runtime host platform
+- Delegate to `prerequisites_macos.py` or `prerequisites_linux.py`
+- macOS: Xcode tools, Homebrew, CocoaPods, Android/iOS helpers
+- Linux: APT package verification/install for Flutter Linux toolchain dependencies
 
 **Key Methods**:
 - `check_and_install()`: Main entry point

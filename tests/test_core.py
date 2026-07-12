@@ -145,3 +145,21 @@ class TestFlutterSetup:
     def test_show_next_steps(self, setup: FlutterSetup) -> None:
         """Test showing next steps."""
         setup._show_next_steps()  # Should not raise
+
+    def test_show_next_steps_linux_profile(self, setup: FlutterSetup) -> None:
+        """Test Linux-specific shell profile guidance."""
+        setup.platform = "linux"
+        with patch("flutter_setup.core.console.print") as mock_print:
+            setup._show_next_steps()
+            panel = mock_print.call_args_list[-1][0][0]
+            assert "source ~/.bashrc" in str(panel.renderable)
+            assert "source ~/.zshrc" in str(panel.renderable)
+
+    def test_show_next_steps_macos_profile(self, setup: FlutterSetup) -> None:
+        """Test macOS-specific shell profile guidance."""
+        setup.platform = "darwin"
+        with patch("flutter_setup.core.console.print") as mock_print:
+            setup._show_next_steps()
+            panel = mock_print.call_args_list[-1][0][0]
+            assert "source ~/.zprofile" in str(panel.renderable)
+            assert "source ~/.zshrc" in str(panel.renderable)

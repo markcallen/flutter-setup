@@ -17,11 +17,18 @@ from .config import (
     IosLanguage,
     AndroidLanguage,
     UpdateMode,
+    Architecture,
+    Database,
+    Testing,
+    AuthProvider,
+    CloudDatabase,
+    NotificationsProvider,
 )
 from .config_manager import ConfigManager
 from .exceptions import FlutterSetupError
 from .prerequisites import PrerequisitesManager
 from .flutter_manager import FlutterManager
+from .platform import detect_runtime_platform
 
 console = Console()
 
@@ -59,7 +66,7 @@ def print_banner() -> None:
     """Print the application banner."""
     banner = """
 [bold blue]Flutter Development Environment Setup[/bold blue]
-[dim]Automated Flutter development environment setup for macOS[/dim]
+[dim]Automated Flutter development environment setup for macOS and Linux[/dim]
     """
     console.print(Panel(banner, border_style="blue"))
 
@@ -155,6 +162,70 @@ def init_config(force: bool) -> None:
         type=str,
     )
 
+    # 4. Architecture template
+    console.print("\n[bold]4. Architecture Template[/bold]")
+    if existing_config:
+        current_architecture = existing_config.get("project", {}).get(
+            "architecture", "basic"
+        )
+        console.print(f"[dim]Current: {current_architecture}[/dim]")
+    else:
+        current_architecture = "basic"
+
+    architecture = click.prompt(
+        "Architecture template",
+        default=current_architecture,
+        type=click.Choice(["basic", "clean"], case_sensitive=False),
+    )
+
+    # 5. Local database
+    console.print("\n[bold]5. Local Database[/bold]")
+    if existing_config:
+        current_database = existing_config.get("project", {}).get("database", "none")
+        console.print(f"[dim]Current: {current_database}[/dim]")
+    else:
+        current_database = "none"
+
+    database = click.prompt(
+        "Local database",
+        default=current_database,
+        type=click.Choice(["none", "sqlite"], case_sensitive=False),
+    )
+
+    # 6. Testing starter
+    console.print("\n[bold]6. Testing Starter[/bold]")
+    if existing_config:
+        current_testing = existing_config.get("project", {}).get("testing", "standard")
+        console.print(f"[dim]Current: {current_testing}[/dim]")
+    else:
+        current_testing = "standard"
+
+    testing = click.prompt(
+        "Testing starter",
+        default=current_testing,
+        type=click.Choice(["standard", "mocktail"], case_sensitive=False),
+    )
+
+    # 7. Firebase services
+    console.print("\n[bold]7. Firebase Services[/bold]")
+    project_config = existing_config.get("project", {}) if existing_config else {}
+
+    auth_provider = click.prompt(
+        "Auth provider",
+        default=project_config.get("auth_provider", "none"),
+        type=click.Choice(["none", "firebase"], case_sensitive=False),
+    )
+    cloud_database = click.prompt(
+        "Cloud database",
+        default=project_config.get("cloud_database", "none"),
+        type=click.Choice(["none", "firestore"], case_sensitive=False),
+    )
+    notifications_provider = click.prompt(
+        "Notifications provider",
+        default=project_config.get("notifications_provider", "none"),
+        type=click.Choice(["none", "firebase"], case_sensitive=False),
+    )
+
     # Build the config
     config = {
         "flutter": {
@@ -173,6 +244,12 @@ def init_config(force: bool) -> None:
                 if existing_config
                 else "app"
             ),
+            "architecture": architecture.lower(),
+            "database": database.lower(),
+            "testing": testing.lower(),
+            "auth_provider": auth_provider.lower(),
+            "cloud_database": cloud_database.lower(),
+            "notifications_provider": notifications_provider.lower(),
             "ios_language": (
                 existing_config.get("project", {}).get("ios_language", "swift")
                 if existing_config
@@ -197,6 +274,12 @@ def init_config(force: bool) -> None:
     console.print(f"  Flutter location: {config['flutter']['location']}")
     console.print(f"  Flutter channel: {config['flutter']['channel']}")
     console.print(f"  Organization: {config['project']['org']}")
+    console.print(f"  Architecture: {config['project']['architecture']}")
+    console.print(f"  Database: {config['project']['database']}")
+    console.print(f"  Testing: {config['project']['testing']}")
+    console.print(f"  Auth provider: {config['project']['auth_provider']}")
+    console.print(f"  Cloud database: {config['project']['cloud_database']}")
+    console.print(f"  Notifications: {config['project']['notifications_provider']}")
     console.print(
         "\n[dim]You can edit this file directly or run 'flutter-setup init' again to update it.[/dim]"
     )
@@ -232,10 +315,13 @@ def check_command(verbose: bool) -> None:
         channel = file_config.get("flutter", {}).get("channel", "stable")
 
         # Create minimal config for checking (we don't need project details)
+        host_platform = detect_runtime_platform()
+        default_platform = "ios" if host_platform == "darwin" else "linux"
+
         # Use dummy values for required fields
         config = Config(
             project_name="dummy",
-            platforms=["ios"],  # Default platform for checks
+            platforms=[default_platform],
             org="com.example",
             channel=channel,
             output_dir=Path("."),
@@ -313,6 +399,42 @@ def check_command(verbose: bool) -> None:
     help="Project template (default: app)",
 )
 @click.option(
+    "--architecture",
+    type=click.Choice(["basic", "clean"]),
+    default="basic",
+    help="Application architecture scaffold (default: basic)",
+)
+@click.option(
+    "--database",
+    type=click.Choice(["none", "sqlite"]),
+    default="none",
+    help="Local persistence scaffold (default: none)",
+)
+@click.option(
+    "--testing",
+    type=click.Choice(["standard", "mocktail"]),
+    default="standard",
+    help="Testing starter scaffold (default: standard)",
+)
+@click.option(
+    "--auth-provider",
+    type=click.Choice(["none", "firebase"]),
+    default="none",
+    help="Auth integration scaffold (default: none)",
+)
+@click.option(
+    "--cloud-database",
+    type=click.Choice(["none", "firestore"]),
+    default="none",
+    help="Cloud database integration scaffold (default: none)",
+)
+@click.option(
+    "--notifications-provider",
+    type=click.Choice(["none", "firebase"]),
+    default="none",
+    help="Push notifications scaffold (default: none)",
+)
+@click.option(
     "--ios-language",
     type=click.Choice(["swift", "objc"]),
     default="swift",
@@ -350,6 +472,12 @@ def setup_command(
     channel: FlutterChannel,
     dir: str,
     template: TemplateType,
+    architecture: Architecture,
+    database: Database,
+    testing: Testing,
+    auth_provider: AuthProvider,
+    cloud_database: CloudDatabase,
+    notifications_provider: NotificationsProvider,
     ios_language: IosLanguage,
     android_language: AndroidLanguage,
     flutter_update: UpdateMode,
@@ -398,6 +526,35 @@ def setup_command(
             TemplateType,
             merge_cli_with_config(ctx, "template", template, file_project),
         )
+        merged_architecture = cast(
+            Architecture,
+            merge_cli_with_config(ctx, "architecture", architecture, file_project),
+        )
+        merged_database = cast(
+            Database,
+            merge_cli_with_config(ctx, "database", database, file_project),
+        )
+        merged_testing = cast(
+            Testing,
+            merge_cli_with_config(ctx, "testing", testing, file_project),
+        )
+        merged_auth_provider = cast(
+            AuthProvider,
+            merge_cli_with_config(ctx, "auth_provider", auth_provider, file_project),
+        )
+        merged_cloud_database = cast(
+            CloudDatabase,
+            merge_cli_with_config(ctx, "cloud_database", cloud_database, file_project),
+        )
+        merged_notifications_provider = cast(
+            NotificationsProvider,
+            merge_cli_with_config(
+                ctx,
+                "notifications_provider",
+                notifications_provider,
+                file_project,
+            ),
+        )
         merged_ios_language = cast(
             IosLanguage,
             merge_cli_with_config(ctx, "ios_language", ios_language, file_project),
@@ -433,6 +590,12 @@ def setup_command(
             dry_run=dry_run,
             verbose=verbose,
             flutter_location=flutter_location,
+            architecture=merged_architecture,
+            database=merged_database,
+            testing=merged_testing,
+            auth_provider=merged_auth_provider,
+            cloud_database=merged_cloud_database,
+            notifications_provider=merged_notifications_provider,
         )
 
         # Create and run setup
