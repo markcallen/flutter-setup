@@ -1,0 +1,6 @@
+services:
+  smoke-test-fast-build:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.sdk-base
+    image: ghcr.io/markcallen/flutter-setup-sdk-base:latest

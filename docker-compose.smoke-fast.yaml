@@ -1,8 +1,5 @@
 services:
   smoke-test-fast:
-    build:
-      context: .
-      dockerfile: tests/Dockerfile.sdk-base
     image: ghcr.io/markcallen/flutter-setup-sdk-base:latest
     container_name: flutter-setup-smoke-fast
     volumes:

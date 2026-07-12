@@ -11,6 +11,12 @@ IosLanguage = Literal["swift", "objc"]
 AndroidLanguage = Literal["kotlin", "java"]
 UpdateMode = Literal["reset", "reclone", "skip"]
 Platform = Literal["ios", "android", "macos", "linux", "windows", "web"]
+Architecture = Literal["basic", "clean"]
+Database = Literal["none", "sqlite"]
+Testing = Literal["standard", "mocktail"]
+AuthProvider = Literal["none", "firebase"]
+CloudDatabase = Literal["none", "firestore"]
+NotificationsProvider = Literal["none", "firebase"]
 
 
 @dataclass
@@ -29,6 +35,12 @@ class Config:
     dry_run: bool
     verbose: bool
     flutter_location: Path
+    architecture: Architecture = "basic"
+    database: Database = "none"
+    testing: Testing = "standard"
+    auth_provider: AuthProvider = "none"
+    cloud_database: CloudDatabase = "none"
+    notifications_provider: NotificationsProvider = "none"
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -57,6 +69,26 @@ class Config:
                 raise ValueError(f"Invalid iOS language: {self.ios_language}")
             if self.android_language not in ["kotlin", "java"]:
                 raise ValueError(f"Invalid Android language: {self.android_language}")
+
+        if self.architecture not in ["basic", "clean"]:
+            raise ValueError(f"Invalid architecture: {self.architecture}")
+
+        if self.database not in ["none", "sqlite"]:
+            raise ValueError(f"Invalid database: {self.database}")
+
+        if self.testing not in ["standard", "mocktail"]:
+            raise ValueError(f"Invalid testing framework: {self.testing}")
+
+        if self.auth_provider not in ["none", "firebase"]:
+            raise ValueError(f"Invalid auth provider: {self.auth_provider}")
+
+        if self.cloud_database not in ["none", "firestore"]:
+            raise ValueError(f"Invalid cloud database: {self.cloud_database}")
+
+        if self.notifications_provider not in ["none", "firebase"]:
+            raise ValueError(
+                f"Invalid notifications provider: {self.notifications_provider}"
+            )
 
     @property
     def project_path(self) -> Path:

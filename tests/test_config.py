@@ -36,6 +36,12 @@ class TestConfig:
         assert config.flutter_update_mode == "reset"
         assert config.dry_run is True
         assert config.verbose is True
+        assert config.architecture == "basic"
+        assert config.database == "none"
+        assert config.testing == "standard"
+        assert config.auth_provider == "none"
+        assert config.cloud_database == "none"
+        assert config.notifications_provider == "none"
 
     def test_package_name_sanitization(self) -> None:
         """Test package name sanitization."""
@@ -273,3 +279,52 @@ class TestConfig:
             flutter_location=Path.home() / "development" / "flutter",
         )
         assert config.platforms == ["ios", "android", "web"]
+
+    def test_valid_architecture_and_services(self) -> None:
+        """Test optional architecture, persistence, testing, and services."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["ios"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("."),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path.home() / "development" / "flutter",
+            architecture="clean",
+            database="sqlite",
+            testing="mocktail",
+            auth_provider="firebase",
+            cloud_database="firestore",
+            notifications_provider="firebase",
+        )
+
+        assert config.architecture == "clean"
+        assert config.database == "sqlite"
+        assert config.testing == "mocktail"
+        assert config.auth_provider == "firebase"
+        assert config.cloud_database == "firestore"
+        assert config.notifications_provider == "firebase"
+
+    def test_invalid_architecture(self) -> None:
+        """Test validation of invalid architecture."""
+        with pytest.raises(ValueError, match="Invalid architecture"):
+            Config(
+                project_name="TestApp",
+                platforms=["ios"],
+                org="com.test",
+                channel="stable",
+                output_dir=Path("."),
+                template="app",
+                ios_language="swift",
+                android_language="kotlin",
+                flutter_update_mode="reset",
+                dry_run=False,
+                verbose=False,
+                flutter_location=Path.home() / "development" / "flutter",
+                architecture="layered",  # type: ignore[arg-type]
+            )

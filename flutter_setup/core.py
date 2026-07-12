@@ -41,6 +41,12 @@ class FlutterSetup:
             f"[dim]Template: {self.config.template} | Org: {self.config.org} | Channel: {self.config.channel}[/dim]"
         )
         console.print(
+            f"[dim]Architecture: {self.config.architecture} | Database: {self.config.database}[/dim]"
+        )
+        console.print(
+            f"[dim]Testing: {self.config.testing} | Auth: {self.config.auth_provider} | Cloud DB: {self.config.cloud_database} | Notifications: {self.config.notifications_provider}[/dim]"
+        )
+        console.print(
             f"[dim]Platforms: {', '.join(self.config.platforms)} | Package: {self.config.package_name}[/dim]"
         )
         console.print(f"[dim]Host OS: {self.platform}[/dim]")

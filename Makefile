@@ -36,7 +36,7 @@ format:
 check-all: lint type-check test
 
 smoke-build-fast:
-	docker compose -f docker-compose.smoke-fast.yaml build
+	docker compose -f docker-compose.smoke-fast-build.yaml build
 
 smoke-build-full:
 	docker compose -f docker-compose.smoke-full.yaml build

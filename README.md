@@ -98,6 +98,12 @@ flutter-setup setup MyApp ios android web
 | `--channel` | Flutter channel (stable/beta) | `stable` | ✅ |
 | `--dir` | Output directory | Current directory | ❌ |
 | `--template` | Project template (app/plugin) | `app` | ✅ |
+| `--architecture` | Application architecture scaffold (basic/clean) | `basic` | ✅ |
+| `--database` | Local persistence scaffold (none/sqlite) | `none` | ✅ |
+| `--testing` | Testing starter scaffold (standard/mocktail) | `standard` | ✅ |
+| `--auth-provider` | Auth integration scaffold (none/firebase) | `none` | ✅ |
+| `--cloud-database` | Cloud database scaffold (none/firestore) | `none` | ✅ |
+| `--notifications-provider` | Push notifications scaffold (none/firebase) | `none` | ✅ |
 | `--ios-language` | iOS language for plugins (swift/objc) | `swift` | ✅ |
 | `--android-language` | Android language for plugins (kotlin/java) | `kotlin` | ✅ |
 | `--flutter-update` | Flutter update mode (reset/reclone/skip) | `reset` | ✅ |
@@ -124,6 +130,10 @@ flutter-setup setup MyApp ios android web
 - ✅ Flutter project creation with specified platforms
 - ✅ Package name sanitization
 - ✅ Template-specific configuration
+- ✅ Optional Clean Architecture scaffold
+- ✅ Optional SQLite/Drift local persistence scaffold
+- ✅ Optional Firebase Auth, Firestore, and Firebase Messaging scaffolds
+- ✅ Optional Mocktail testing starter
 
 ### 4. Development Environment
 - ✅ VS Code/Cursor configuration
@@ -185,6 +195,12 @@ flutter:
 project:
   org: com.mycompany
   template: app
+  architecture: basic
+  database: none
+  testing: standard
+  auth_provider: none
+  cloud_database: none
+  notifications_provider: none
   ios_language: swift
   android_language: kotlin
 ```
