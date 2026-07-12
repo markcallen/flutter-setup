@@ -19,7 +19,7 @@ class ProjectBootstrap:
         """Initialize ProjectBootstrap."""
         self.config = config
         self.home = Path.home()
-        self.flutter_root = self.home / "development" / "flutter"
+        self.flutter_root = config.flutter_location
 
     def bootstrap_project(self) -> None:
         """Bootstrap the development environment."""
@@ -42,6 +42,9 @@ class ProjectBootstrap:
 
         # Create analysis options
         self._create_analysis_options()
+
+        # Create optional architecture and persistence scaffolds
+        self._create_architecture_scaffold()
 
         # Create CI/CD workflows and configuration
         self._create_cicd()
@@ -92,7 +95,14 @@ class ProjectBootstrap:
 
     def _create_makefile(self) -> None:
         """Create Makefile with common commands."""
-        makefile_content = """run:
+        generate_target = ""
+        if self.config.database == "sqlite":
+            generate_target = """
+generate:
+	dart run build_runner build --delete-conflicting-outputs
+"""
+
+        makefile_content = f"""run:
 	flutter run -d chrome
 
 run_ios:
@@ -109,7 +119,7 @@ test:
 
 integration:
 	flutter test integration_test
-"""
+{generate_target}"""
 
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
@@ -155,14 +165,26 @@ void main() {
         ) as f:
             f.write(unit_test)
 
+        app_import = f"package:{self.config.package_name}/main.dart"
+        app_widget = "MyApp"
+        riverpod_import = ""
+        pump_widget = f"const {app_widget}()"
+        if self.config.architecture == "clean":
+            app_import = f"package:{self.config.package_name}/src/app/app.dart"
+            app_widget = "App"
+            riverpod_import = (
+                "import 'package:flutter_riverpod/flutter_riverpod.dart';\n"
+            )
+            pump_widget = f"const ProviderScope(child: {app_widget}())"
+
         # Widget test
         widget_test = f"""import 'package:flutter_test/flutter_test.dart';
-import 'package:{self.config.package_name}/main.dart';
+{riverpod_import}import '{app_import}';
 
 void main() {{
   testWidgets('App loads without errors', (tester) async {{
-    await tester.pumpWidget(const MyApp());
-    expect(find.byType(MyApp), findsOneWidget);
+    await tester.pumpWidget({pump_widget});
+    expect(find.byType({app_widget}), findsOneWidget);
   }});
 }}
 """
@@ -175,14 +197,14 @@ void main() {{
         # Integration test
         integration_test = f"""import 'package:integration_test/integration_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:{self.config.package_name}/main.dart';
+{riverpod_import}import '{app_import}';
 
 void main() {{
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('home page renders', (tester) async {{
-    await tester.pumpWidget(const MyApp());
-    expect(find.byType(MyApp), findsOneWidget);
+    await tester.pumpWidget({pump_widget});
+    expect(find.byType({app_widget}), findsOneWidget);
   }});
 }}
 """
@@ -207,6 +229,249 @@ linter:
 
         console.print("  ✅ Analysis options created")
 
+    def _create_architecture_scaffold(self) -> None:
+        """Create optional reusable application architecture scaffolds."""
+        if self.config.architecture == "clean":
+            self._create_clean_architecture_scaffold()
+
+        if self.config.database == "sqlite":
+            self._create_sqlite_scaffold()
+
+        if self.config.testing == "mocktail":
+            self._create_mocktail_scaffold()
+
+        if self._uses_firebase():
+            self._create_firebase_scaffold()
+
+    def _uses_firebase(self) -> bool:
+        """Return whether any Firebase integration was selected."""
+        return (
+            self.config.auth_provider == "firebase"
+            or self.config.cloud_database == "firestore"
+            or self.config.notifications_provider == "firebase"
+        )
+
+    def _create_clean_architecture_scaffold(self) -> None:
+        """Create a Clean Architecture starter layout."""
+        src_dir = self.config.project_path / "lib" / "src"
+        directories = [
+            src_dir / "app",
+            src_dir / "core" / "error",
+            src_dir / "core" / "routing",
+            src_dir / "core" / "theme",
+            src_dir / "features" / "home" / "data",
+            src_dir / "features" / "home" / "domain",
+            src_dir / "features" / "home" / "presentation",
+            self.config.project_path / "test" / "features" / "home",
+        ]
+
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+
+        (src_dir / "app" / "app.dart").write_text(
+            """import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../features/home/presentation/home_screen.dart';
+
+class App extends ConsumerWidget {
+  const App({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp(
+      title: 'Flutter App',
+      theme: ThemeData(useMaterial3: true),
+      home: const HomeScreen(),
+    );
+  }
+}
+"""
+        )
+
+        (
+            src_dir / "features" / "home" / "presentation" / "home_screen.dart"
+        ).write_text(
+            """import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return const Scaffold(
+      body: Center(
+        child: Text('Home'),
+      ),
+    );
+  }
+}
+"""
+        )
+
+        (src_dir / "core" / "error" / "app_failure.dart").write_text(
+            """class AppFailure {
+  const AppFailure(this.message);
+
+  final String message;
+}
+"""
+        )
+
+        firebase_import = ""
+        firebase_init = ""
+        if self._uses_firebase():
+            firebase_import = "import 'src/core/firebase/firebase_initializer.dart';\n"
+            firebase_init = "  await initializeFirebase();\n"
+
+        main_dart = self.config.project_path / "lib" / "main.dart"
+        if main_dart.exists():
+            main_dart.write_text(
+                f"""import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+{firebase_import}\
+import 'src/app/app.dart';
+
+Future<void> main() async {{
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
+{firebase_init}\
+  runApp(const ProviderScope(child: App()));
+}}
+"""
+            )
+
+        console.print("  ✅ Clean Architecture scaffold created")
+
+    def _create_sqlite_scaffold(self) -> None:
+        """Create a Drift/SQLite starter database scaffold."""
+        data_dir = self.config.project_path / "lib" / "src" / "core" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        (data_dir / "app_database.dart").write_text(
+            """import 'dart:io';
+
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+part 'app_database.g.dart';
+
+class AppSettings extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}
+
+@DriftDatabase(tables: [AppSettings])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(_openConnection());
+
+  @override
+  int get schemaVersion => 1;
+}
+
+LazyDatabase _openConnection() {
+  return LazyDatabase(() async {
+    final dbFolder = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dbFolder.path, 'app.sqlite'));
+    return NativeDatabase.createInBackground(file);
+  });
+}
+"""
+        )
+
+        console.print("  ✅ SQLite persistence scaffold created")
+
+    def _create_mocktail_scaffold(self) -> None:
+        """Create shared mocktail test helpers."""
+        helpers_dir = self.config.project_path / "test" / "helpers"
+        helpers_dir.mkdir(parents=True, exist_ok=True)
+
+        (helpers_dir / "mocks.dart").write_text(
+            """import 'package:mocktail/mocktail.dart';
+
+class MockRepository extends Mock {}
+"""
+        )
+
+        console.print("  ✅ Mocktail testing scaffold created")
+
+    def _create_firebase_scaffold(self) -> None:
+        """Create Firebase integration starter files."""
+        firebase_dir = self.config.project_path / "lib" / "src" / "core" / "firebase"
+        firebase_dir.mkdir(parents=True, exist_ok=True)
+
+        (firebase_dir / "firebase_initializer.dart").write_text(
+            """import 'package:firebase_core/firebase_core.dart';
+
+Future<void> initializeFirebase() async {
+  await Firebase.initializeApp();
+}
+"""
+        )
+
+        if self.config.auth_provider == "firebase":
+            (firebase_dir / "firebase_auth_service.dart").write_text(
+                """import 'package:firebase_auth/firebase_auth.dart';
+
+class FirebaseAuthService {
+  FirebaseAuthService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
+
+  final FirebaseAuth _auth;
+
+  Stream<User?> authStateChanges() => _auth.authStateChanges();
+}
+"""
+            )
+
+        if self.config.cloud_database == "firestore":
+            (firebase_dir / "firestore_database.dart").write_text(
+                """import 'package:cloud_firestore/cloud_firestore.dart';
+
+class FirestoreDatabase {
+  FirestoreDatabase({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> collection(String path) {
+    return _firestore.collection(path);
+  }
+}
+"""
+            )
+
+        if self.config.notifications_provider == "firebase":
+            (firebase_dir / "firebase_notifications_service.dart").write_text(
+                """import 'package:firebase_messaging/firebase_messaging.dart';
+
+class FirebaseNotificationsService {
+  FirebaseNotificationsService({FirebaseMessaging? messaging})
+    : _messaging = messaging ?? FirebaseMessaging.instance;
+
+  final FirebaseMessaging _messaging;
+
+  Future<NotificationSettings> requestPermission() {
+    return _messaging.requestPermission();
+  }
+
+  Future<String?> getToken() {
+    return _messaging.getToken();
+  }
+}
+"""
+            )
+
+        console.print("  ✅ Firebase integration scaffold created")
+
     def _create_cicd(self) -> None:
         """Create CI/CD workflows and configuration."""
         cicd_generator = CicdGenerator(self.config)
@@ -215,32 +480,32 @@ linter:
     def _add_dependencies(self) -> None:
         """Add required dependencies to the project."""
         try:
-            # Add flutter_dotenv
-            subprocess.run(
-                [
-                    str(self.flutter_root / "bin" / "flutter"),
-                    "pub",
-                    "add",
-                    "flutter_dotenv",
-                ],
-                cwd=self.config.project_path,
-                check=False,
-                capture_output=True,
-            )
+            for dependency in self._runtime_dependencies():
+                subprocess.run(
+                    [
+                        str(self.flutter_root / "bin" / "flutter"),
+                        "pub",
+                        "add",
+                        dependency,
+                    ],
+                    cwd=self.config.project_path,
+                    check=False,
+                    capture_output=True,
+                )
 
-            # Add flutter_lints as dev dependency
-            subprocess.run(
-                [
-                    str(self.flutter_root / "bin" / "flutter"),
-                    "pub",
-                    "add",
-                    "--dev",
-                    "flutter_lints",
-                ],
-                cwd=self.config.project_path,
-                check=False,
-                capture_output=True,
-            )
+            for dependency in self._dev_dependencies():
+                subprocess.run(
+                    [
+                        str(self.flutter_root / "bin" / "flutter"),
+                        "pub",
+                        "add",
+                        "--dev",
+                        dependency,
+                    ],
+                    cwd=self.config.project_path,
+                    check=False,
+                    capture_output=True,
+                )
 
             # Add integration_test as SDK dependency by directly editing pubspec.yaml
             # flutter pub add doesn't correctly handle SDK dependencies
@@ -250,6 +515,44 @@ linter:
 
         except Exception as e:
             console.print(f"  ⚠️  Dependency addition warning: {e}")
+
+    def _runtime_dependencies(self) -> list[str]:
+        """Return runtime dependencies required by selected scaffolds."""
+        dependencies = ["flutter_dotenv"]
+
+        if self.config.architecture == "clean":
+            dependencies.append("flutter_riverpod")
+
+        if self.config.database == "sqlite":
+            dependencies.extend(
+                ["drift", "sqlite3_flutter_libs", "path_provider", "path"]
+            )
+
+        if self._uses_firebase():
+            dependencies.append("firebase_core")
+
+        if self.config.auth_provider == "firebase":
+            dependencies.append("firebase_auth")
+
+        if self.config.cloud_database == "firestore":
+            dependencies.append("cloud_firestore")
+
+        if self.config.notifications_provider == "firebase":
+            dependencies.append("firebase_messaging")
+
+        return dependencies
+
+    def _dev_dependencies(self) -> list[str]:
+        """Return dev dependencies required by selected scaffolds."""
+        dependencies = ["flutter_lints"]
+
+        if self.config.database == "sqlite":
+            dependencies.extend(["drift_dev", "build_runner"])
+
+        if self.config.testing == "mocktail":
+            dependencies.append("mocktail")
+
+        return dependencies
 
     def _add_integration_test_sdk_dependency(self) -> None:
         """Add integration_test as an SDK dependency to pubspec.yaml."""
@@ -343,6 +646,39 @@ API_URL=https://api.example.com
                 with open(main_dart, "w") as f:
                     f.write(modified_content)
 
+            if self._uses_firebase():
+                content = main_dart.read_text()
+                if "firebase_initializer.dart" not in content:
+                    lines = content.split("\n")
+                    import_index = -1
+                    for i, line in enumerate(lines):
+                        if line.strip().startswith("import "):
+                            import_index = i
+
+                    firebase_import = (
+                        "import 'src/core/firebase/firebase_initializer.dart';"
+                    )
+                    if import_index >= 0:
+                        lines.insert(import_index + 1, firebase_import)
+                    else:
+                        lines.insert(0, firebase_import)
+
+                    modified_content = "\n".join(lines)
+                    if "await dotenv.load" in modified_content:
+                        modified_content = modified_content.replace(
+                            '  await dotenv.load(fileName: ".env");',
+                            '  await dotenv.load(fileName: ".env");\n'
+                            "  await initializeFirebase();",
+                        )
+                    elif "Future<void> main() async {" in modified_content:
+                        modified_content = modified_content.replace(
+                            "Future<void> main() async {",
+                            "Future<void> main() async {\n"
+                            "  await initializeFirebase();",
+                        )
+
+                    main_dart.write_text(modified_content)
+
         except Exception as e:
             console.print(f"  ⚠️  Main.dart modification warning: {e}")
 
@@ -371,6 +707,23 @@ make analyze
 
 ## Env vars
 Edit `.env` and access with `dotenv.env['KEY']` after startup.
+
+## Architecture
+Architecture scaffold: `{self.config.architecture}`.
+
+## Persistence
+Local database scaffold: `{self.config.database}`.
+
+## Testing
+Testing starter: `{self.config.testing}`.
+
+## Firebase
+Auth provider: `{self.config.auth_provider}`.
+Cloud database: `{self.config.cloud_database}`.
+Notifications: `{self.config.notifications_provider}`.
+
+When Firebase options are enabled, run `flutterfire configure` for this
+project before using the generated Firebase services.
 """
 
         with open(self.config.project_path / "README.md", "w") as f:
