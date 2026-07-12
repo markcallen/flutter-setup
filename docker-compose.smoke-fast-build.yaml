@@ -1,0 +1,6 @@
+services:
+  smoke-test-fast-build:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.sdk-base
+    image: ${SMOKE_SDK_IMAGE:-ghcr.io/markcallen/flutter-setup-sdk-base:flutter-stable-ubuntu24.04}

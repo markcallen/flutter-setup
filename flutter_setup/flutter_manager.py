@@ -9,6 +9,7 @@ from rich.console import Console
 
 from .config import Config
 from .exceptions import FlutterInstallationError
+from .platform import detect_runtime_platform
 
 console = Console()
 
@@ -19,9 +20,31 @@ class FlutterManager:
     def __init__(self, config: Config):
         """Initialize FlutterManager."""
         self.config = config
+        self.platform = detect_runtime_platform()
         self.home = Path.home()
         self.flutter_root = config.flutter_location
-        self.zprofile = self.home / ".zprofile"
+        self.path_profiles = self._path_profiles_for_platform()
+
+    def _path_profiles_for_platform(self) -> list[Path]:
+        """Return shell profile files that should contain Flutter PATH."""
+        if self.platform == "darwin":
+            return [self.home / ".zprofile", self.home / ".zshrc"]
+        if self.platform == "linux":
+            return [self.home / ".bashrc", self.home / ".zshrc"]
+        return [self.home / ".profile"]
+
+    def _normalize_flutter_bin_path(self, path: str) -> str:
+        """Normalize common shell home forms before comparing Flutter bin paths."""
+        expanded = path.replace("$HOME", str(self.home))
+        if expanded == "~":
+            expanded = str(self.home)
+        elif expanded.startswith("~/"):
+            expanded = str(self.home / expanded[2:])
+        return str(Path(expanded))
+
+    def _expected_flutter_bin_path(self) -> str:
+        """Return the normalized expected Flutter bin path."""
+        return self._normalize_flutter_bin_path(str(self.flutter_root / "bin"))
 
     def ensure_flutter(self) -> None:
         """Ensure Flutter SDK is installed and up to date."""
@@ -214,43 +237,36 @@ class FlutterManager:
         console.print("  🔧 Configuring Flutter PATH...")
 
         flutter_path = f'export PATH="{self.flutter_root}/bin:$PATH"'
+        flutter_path_pattern = (
+            r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
+        )
 
-        # Add to .zprofile if not already there
-        if self.zprofile.exists():
-            with open(self.zprofile, "r") as f:
-                content = f.read()
+        for profile in self.path_profiles:
+            if profile.exists():
+                with open(profile, "r") as f:
+                    content = f.read()
 
-            # Check if any Flutter PATH is already configured
-            # Pattern matches: export PATH="/path/to/flutter/bin:$PATH"
-            flutter_path_pattern = (
-                r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
-            )
-            existing_match = re.search(flutter_path_pattern, content)
-
-            if existing_match:
-                existing_flutter_path = existing_match.group(1)
-                # Check if it's the same path we want to add
-                if existing_flutter_path == str(self.flutter_root / "bin"):
-                    console.print("  ✅ Flutter PATH already in .zprofile")
-                else:
-                    console.print(
-                        f"  ⚠️  Different Flutter PATH already configured in .zprofile: {existing_flutter_path}"
+                existing_match = re.search(flutter_path_pattern, content)
+                if existing_match:
+                    existing_flutter_path = existing_match.group(1)
+                    normalized_existing_path = self._normalize_flutter_bin_path(
+                        existing_flutter_path
                     )
-                    console.print(
-                        f"  ℹ️  Skipping PATH update. Current Flutter location: {self.flutter_root}"
-                    )
-            elif flutter_path not in content:
-                # No Flutter PATH found, add it
-                with open(self.zprofile, "a") as f:
+                    if normalized_existing_path == self._expected_flutter_bin_path():
+                        console.print(f"  ✅ Flutter PATH already in {profile.name}")
+                    else:
+                        console.print(
+                            f"  ⚠️  Different Flutter PATH in {profile.name}: {existing_flutter_path}"
+                        )
+                    continue
+
+                with open(profile, "a") as f:
                     f.write(f"\n{flutter_path}\n")
-                console.print("  ✅ Flutter PATH added to .zprofile")
+                console.print(f"  ✅ Flutter PATH added to {profile.name}")
             else:
-                # Exact path already exists
-                console.print("  ✅ Flutter PATH already in .zprofile")
-        else:
-            with open(self.zprofile, "w") as f:
-                f.write(f"{flutter_path}\n")
-            console.print("  ✅ Flutter PATH added to .zprofile")
+                with open(profile, "w") as f:
+                    f.write(f"{flutter_path}\n")
+                console.print(f"  ✅ Flutter PATH added to {profile.name}")
 
         # Add to current environment
         flutter_bin = self.flutter_root / "bin"
@@ -288,9 +304,19 @@ class FlutterManager:
                 if "Some Android licenses not accepted" in combined_output:
                     console.print("  📱 Android licenses need acceptance")
                     self._handle_android_licenses()
+                if self.platform == "linux":
+                    self._print_linux_doctor_guidance(combined_output)
 
         except Exception as e:
             console.print(f"  ⚠️  Flutter doctor warning: {e}")
+
+    def _print_linux_doctor_guidance(self, output: str) -> None:
+        """Print Linux-specific remediation hints for doctor issues."""
+        if "Linux toolchain" in output or "Unable to locate" in output:
+            console.print("  🐧 Linux toolchain issues detected")
+            console.print(
+                "  ℹ️  Ensure required packages are installed via apt (git curl unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config)"
+            )
 
     def _handle_android_licenses(self) -> None:
         """Handle Android license acceptance."""
@@ -324,29 +350,41 @@ class FlutterManager:
 
         # Check Flutter PATH configuration
         console.print("  🔧 Checking Flutter PATH configuration...")
-        if self.zprofile.exists():
-            with open(self.zprofile, "r") as f:
+        flutter_path_pattern = (
+            r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
+        )
+        expected_path = self._expected_flutter_bin_path()
+        found_expected = False
+        found_any = False
+        for profile in self.path_profiles:
+            if not profile.exists():
+                continue
+
+            with open(profile, "r") as f:
                 content = f.read()
 
-            flutter_path_pattern = (
-                r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
-            )
             existing_match = re.search(flutter_path_pattern, content)
-
             if existing_match:
+                found_any = True
                 existing_flutter_path = existing_match.group(1)
-                expected_path = str(self.flutter_root / "bin")
-                if existing_flutter_path == expected_path:
-                    console.print("  ✅ Flutter PATH correctly configured in .zprofile")
+                normalized_existing_path = self._normalize_flutter_bin_path(
+                    existing_flutter_path
+                )
+                if normalized_existing_path == expected_path:
+                    console.print(
+                        f"  ✅ Flutter PATH correctly configured in {profile.name}"
+                    )
+                    found_expected = True
                 else:
                     console.print(
-                        f"  ⚠️  Different Flutter PATH configured: {existing_flutter_path}"
+                        f"  ⚠️  Different Flutter PATH in {profile.name}: {existing_flutter_path}"
                     )
-                    console.print(f"  ℹ️  Expected: {expected_path}")
-            else:
-                console.print("  ⚠️  Flutter PATH not found in .zprofile")
-        else:
-            console.print("  ⚠️  .zprofile not found")
+
+        if not found_any:
+            console.print("  ⚠️  Flutter PATH not found in shell profiles")
+            all_ok = False
+        elif not found_expected:
+            all_ok = False
 
         # Check if Flutter is up to date (if installed)
         if self.flutter_root.exists() and (self.flutter_root / ".git").exists():

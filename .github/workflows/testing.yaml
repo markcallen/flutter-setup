@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -44,11 +44,11 @@ jobs:
           uv pip install pytest pytest-cov --system
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=flutter_setup --cov-report=xml
+        run: uv run pytest --cov=flutter_setup --cov-report=xml --cov-fail-under=50
 
       - name: Report coverage to PR
         if: github.event_name == 'pull_request'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
