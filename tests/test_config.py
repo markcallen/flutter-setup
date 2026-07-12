@@ -328,3 +328,39 @@ class TestConfig:
                 flutter_location=Path.home() / "development" / "flutter",
                 architecture="layered",  # type: ignore[arg-type]
             )
+
+    @pytest.mark.parametrize(
+        ("field", "value", "message"),
+        [
+            ("database", "postgres", "Invalid database"),
+            ("testing", "pytest", "Invalid testing framework"),
+            ("auth_provider", "custom", "Invalid auth provider"),
+            ("cloud_database", "supabase", "Invalid cloud database"),
+            (
+                "notifications_provider",
+                "apns",
+                "Invalid notifications provider",
+            ),
+        ],
+    )
+    def test_invalid_optional_starter_values(
+        self, field: str, value: str, message: str
+    ) -> None:
+        """Test validation of invalid starter option values."""
+        kwargs = {
+            "project_name": "TestApp",
+            "platforms": ["ios"],
+            "org": "com.test",
+            "channel": "stable",
+            "output_dir": Path("."),
+            "template": "app",
+            "ios_language": "swift",
+            "android_language": "kotlin",
+            "flutter_update_mode": "reset",
+            "dry_run": False,
+            "verbose": False,
+            "flutter_location": Path.home() / "development" / "flutter",
+            field: value,
+        }
+        with pytest.raises(ValueError, match=message):
+            Config(**kwargs)  # type: ignore[arg-type]

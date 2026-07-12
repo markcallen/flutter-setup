@@ -347,6 +347,27 @@ class TestProjectBootstrap:
             with patch("builtins.open", side_effect=IOError("Permission denied")):
                 bootstrap._modify_main_dart()  # Should not raise, just warn
 
+    def test_modify_main_dart_adds_firebase_initializer(self, config: Config) -> None:
+        """Test modifying main.dart for Firebase initialization."""
+        config.auth_provider = "firebase"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "lib").mkdir(parents=True)
+            main_dart = config.project_path / "lib" / "main.dart"
+            main_dart.write_text(
+                "import 'package:flutter/material.dart';\n"
+                "Future<void> main() async {\n"
+                "  runApp(const MyApp());\n"
+                "}\n"
+            )
+
+            bootstrap._modify_main_dart()
+
+            content = main_dart.read_text()
+            assert "firebase_initializer.dart" in content
+            assert "await initializeFirebase();" in content
+
     def test_create_vscode_config_content(self, config: Config) -> None:
         """Test VS Code configuration file content."""
         with tempfile.TemporaryDirectory() as tmpdir:

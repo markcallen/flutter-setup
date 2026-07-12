@@ -231,6 +231,13 @@ class TestMacOSPrerequisites:
                 manager._ensure_homebrew_path()
                 mock_run.assert_called_once()
 
+    def test_ensure_homebrew_path_warning(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = subprocess.CalledProcessError(1, "brew")
+                manager._ensure_homebrew_path()
+
     def test_install_packages_success(self, config: Config) -> None:
         manager = MacOSPrerequisites(config)
         with patch("subprocess.run") as mock_run:
@@ -285,6 +292,12 @@ class TestMacOSPrerequisites:
             mock_run.return_value = Mock(returncode=0)
             manager._setup_ios_tools()
             mock_run.assert_called_once()
+
+    def test_setup_ios_tools_warning(self, config: Config) -> None:
+        manager = MacOSPrerequisites(config)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = RuntimeError("pod failed")
+            manager._setup_ios_tools()
 
     def test_check_only_reports_missing_items(self, config: Config) -> None:
         manager = MacOSPrerequisites(config)
