@@ -48,6 +48,12 @@ class ConfigManager:
             "project": {
                 "org": "com.example",
                 "template": "app",
+                "architecture": "basic",
+                "database": "none",
+                "testing": "standard",
+                "auth_provider": "none",
+                "cloud_database": "none",
+                "notifications_provider": "none",
                 "ios_language": "swift",
                 "android_language": "kotlin",
             },
