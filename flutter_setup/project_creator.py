@@ -39,7 +39,9 @@ class ProjectCreator:
         create_cmd = self._build_create_command()
 
         # Execute flutter create
-        console.print(f"  🏗️  Creating Flutter project at {self.config.project_path}...")
+        console.print(
+            f"  🏗️  Creating Flutter project at {self.config.project_path}..."
+        )
 
         try:
             subprocess.run(create_cmd, check=True, capture_output=True, text=True)
