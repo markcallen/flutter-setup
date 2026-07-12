@@ -33,6 +33,19 @@ class FlutterManager:
             return [self.home / ".bashrc", self.home / ".zshrc"]
         return [self.home / ".profile"]
 
+    def _normalize_flutter_bin_path(self, path: str) -> str:
+        """Normalize common shell home forms before comparing Flutter bin paths."""
+        expanded = path.replace("$HOME", str(self.home))
+        if expanded == "~":
+            expanded = str(self.home)
+        elif expanded.startswith("~/"):
+            expanded = str(self.home / expanded[2:])
+        return str(Path(expanded))
+
+    def _expected_flutter_bin_path(self) -> str:
+        """Return the normalized expected Flutter bin path."""
+        return self._normalize_flutter_bin_path(str(self.flutter_root / "bin"))
+
     def ensure_flutter(self) -> None:
         """Ensure Flutter SDK is installed and up to date."""
         if self.config.dry_run:
@@ -236,7 +249,10 @@ class FlutterManager:
                 existing_match = re.search(flutter_path_pattern, content)
                 if existing_match:
                     existing_flutter_path = existing_match.group(1)
-                    if existing_flutter_path == str(self.flutter_root / "bin"):
+                    normalized_existing_path = self._normalize_flutter_bin_path(
+                        existing_flutter_path
+                    )
+                    if normalized_existing_path == self._expected_flutter_bin_path():
                         console.print(f"  ✅ Flutter PATH already in {profile.name}")
                     else:
                         console.print(
@@ -337,7 +353,7 @@ class FlutterManager:
         flutter_path_pattern = (
             r'export\s+PATH=["\']([^"\']*flutter[^"\']*/bin):\$PATH["\']'
         )
-        expected_path = str(self.flutter_root / "bin")
+        expected_path = self._expected_flutter_bin_path()
         found_expected = False
         found_any = False
         for profile in self.path_profiles:
@@ -351,7 +367,10 @@ class FlutterManager:
             if existing_match:
                 found_any = True
                 existing_flutter_path = existing_match.group(1)
-                if existing_flutter_path == expected_path:
+                normalized_existing_path = self._normalize_flutter_bin_path(
+                    existing_flutter_path
+                )
+                if normalized_existing_path == expected_path:
                     console.print(
                         f"  ✅ Flutter PATH correctly configured in {profile.name}"
                     )

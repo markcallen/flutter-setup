@@ -168,6 +168,19 @@ class TestFlutterManager:
         ):
             manager._ensure_flutter_path()  # Should not raise
 
+    def test_normalize_flutter_bin_path_home_forms(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test normalizing common shell home path forms."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager.home = Path(tmpdir)
+            assert manager._normalize_flutter_bin_path("$HOME/flutter/bin") == str(
+                Path(tmpdir) / "flutter" / "bin"
+            )
+            assert manager._normalize_flutter_bin_path("~/flutter/bin") == str(
+                Path(tmpdir) / "flutter" / "bin"
+            )
+
     def test_run_flutter_doctor_success(self, manager: FlutterManager) -> None:
         """Test running Flutter doctor successfully."""
         with patch("subprocess.run") as mock_run:
@@ -226,6 +239,38 @@ class TestFlutterManager:
                         if "rev-list" in args[0]:
                             result = Mock(returncode=0, stdout="0 0\n", stderr="")
                             return result
+                        return Mock(returncode=0, stdout="", stderr="")
+
+                    mock_run.side_effect = run_side_effect
+                    assert manager.check_only() is True
+
+    def test_check_only_accepts_home_path_forms(self, manager: FlutterManager) -> None:
+        """Test check_only accepts $HOME and tilde Flutter PATH entries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            flutter_root = home / "development" / "flutter"
+            (flutter_root / ".git").mkdir(parents=True)
+            (flutter_root / "bin").mkdir(parents=True)
+            (flutter_root / "bin" / "flutter").touch()
+            manager.home = home
+            manager.flutter_root = flutter_root
+
+            mock_profile = MagicMock()
+            mock_profile.exists.return_value = True
+            mock_profile.name = ".bashrc"
+            manager.path_profiles = [mock_profile]
+
+            with patch(
+                "builtins.open",
+                mock_open(
+                    read_data='export PATH="$HOME/development/flutter/bin:$PATH"'
+                ),
+            ):
+                with patch("subprocess.run") as mock_run:
+
+                    def run_side_effect(*args: Any, **kwargs: Any) -> Mock:
+                        if "rev-list" in args[0]:
+                            return Mock(returncode=0, stdout="0 0\n", stderr="")
                         return Mock(returncode=0, stdout="", stderr="")
 
                     mock_run.side_effect = run_side_effect
