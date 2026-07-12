@@ -15,6 +15,7 @@ from .prerequisites import PrerequisitesManager
 from .flutter_manager import FlutterManager
 from .project_creator import ProjectCreator
 from .bootstrap import ProjectBootstrap
+from .platform import detect_runtime_platform
 
 console = Console()
 
@@ -25,6 +26,7 @@ class FlutterSetup:
     def __init__(self, config: Config):
         """Initialize FlutterSetup with configuration."""
         self.config = config
+        self.platform = detect_runtime_platform()
         self.prerequisites = PrerequisitesManager(config)
         self.flutter_manager = FlutterManager(config)
         self.project_creator = ProjectCreator(config)
@@ -39,8 +41,15 @@ class FlutterSetup:
             f"[dim]Template: {self.config.template} | Org: {self.config.org} | Channel: {self.config.channel}[/dim]"
         )
         console.print(
+            f"[dim]Architecture: {self.config.architecture} | Database: {self.config.database}[/dim]"
+        )
+        console.print(
+            f"[dim]Testing: {self.config.testing} | Auth: {self.config.auth_provider} | Cloud DB: {self.config.cloud_database} | Notifications: {self.config.notifications_provider}[/dim]"
+        )
+        console.print(
             f"[dim]Platforms: {', '.join(self.config.platforms)} | Package: {self.config.package_name}[/dim]"
         )
+        console.print(f"[dim]Host OS: {self.platform}[/dim]")
         console.print(f"[dim]Output: {self.config.project_path}[/dim]")
 
         if self.config.dry_run:
@@ -144,19 +153,34 @@ class FlutterSetup:
         """Display next steps for the user."""
         console.print("\n[bold green]🎉 Setup completed successfully![/bold green]")
 
+        if self.platform == "darwin":
+            shell_profile_steps = (
+                "   [code]source ~/.zprofile[/code]    # zsh login shells\n"
+                "   [code]source ~/.zshrc[/code]       # zsh interactive shells"
+            )
+        else:
+            shell_profile_steps = (
+                "   [code]source ~/.bashrc[/code]      # bash\n"
+                "   [code]source ~/.zshrc[/code]       # zsh"
+            )
+        ios_run_step = (
+            "   [code]make run_ios[/code]       # runs on iOS simulator\n"
+            if self.platform == "darwin"
+            else ""
+        )
+
         next_steps = f"""
 [bold]Next steps:[/bold]
 
 1. [blue]Activate Flutter in your shell:[/blue]
-   [code]source ~/.zprofile[/code]
+{shell_profile_steps}
 
 2. [blue]Navigate to your project:[/blue]
    [code]cd "{self.config.project_path}"[/code]
 
 3. [blue]Run your Flutter app:[/blue]
    [code]make run[/code]           # runs on Chrome by default
-   [code]make run_ios[/code]       # runs on iOS simulator
-   [code]make run_android[/code]   # runs on Android emulator
+{ios_run_step}   [code]make run_android[/code]   # runs on Android emulator
 
 4. [blue]Test your setup:[/blue]
    [code]make test[/code]          # run unit + widget tests

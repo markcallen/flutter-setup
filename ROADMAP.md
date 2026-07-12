@@ -43,10 +43,10 @@
 - [ ] Enhanced dry-run mode with detailed preview
 
 #### Testing & Documentation
-- [ ] Comprehensive testing framework for the script itself
-- [ ] Validate created projects work correctly
+- [x] Comprehensive testing framework for the script itself (Tiered Smoke Testing)
+- [x] Validate created projects work correctly
 - [ ] Test on different macOS versions
-- [ ] CI/CD pipeline for the setup script
+- [x] CI/CD pipeline for the setup script
 - [ ] `--help` command with examples
 - [ ] Troubleshooting guide
 - [ ] Basic usage documentation

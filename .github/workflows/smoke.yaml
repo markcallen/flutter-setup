@@ -1,0 +1,104 @@
+name: Smoke Tests
+
+on:
+  pull_request:
+    paths:
+      - "flutter_setup/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "docker-compose.smoke-*.yaml"
+      - "Dockerfile"
+      - ".github/workflows/smoke.yaml"
+  push:
+    branches: ["main"]
+    paths:
+      - "flutter_setup/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "docker-compose.smoke-*.yaml"
+      - "Dockerfile"
+      - ".github/workflows/smoke.yaml"
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: markcallen/flutter-setup-sdk-base
+  SDK_IMAGE_TAG: flutter-stable-ubuntu24.04
+
+jobs:
+  build-base:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push SDK Base Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: tests/Dockerfile.sdk-base
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SDK_IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  smoke-test-fast:
+    runs-on: ubuntu-latest
+    needs: build-base
+    if: always() && (needs.build-base.result == 'success' || needs.build-base.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Fast Smoke Test
+        run: |
+          export SMOKE_SDK_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SDK_IMAGE_TAG }}"
+          # Try to pull the pre-built image to speed up the run
+          echo "Attempting to pull base image: $SMOKE_SDK_IMAGE"
+          if docker pull "$SMOKE_SDK_IMAGE"; then
+            echo "Base image pulled successfully."
+            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
+          else
+            echo "Base image not found in registry, building locally..."
+            docker compose -f docker-compose.smoke-fast-build.yaml build
+            docker compose -f docker-compose.smoke-fast.yaml up smoke-test-fast --exit-code-from smoke-test-fast
+          fi
+
+  smoke-test-full:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Full E2E Smoke Test
+        run: |
+          docker compose -f docker-compose.smoke-full.yaml up smoke-test-full --build --exit-code-from smoke-test-full

@@ -42,7 +42,7 @@ class TestProjectBootstrap:
         """Test ProjectBootstrap initialization."""
         assert bootstrap.config == config
         assert bootstrap.home == Path.home()
-        assert bootstrap.flutter_root == Path.home() / "development" / "flutter"
+        assert bootstrap.flutter_root == config.flutter_location
 
     def test_bootstrap_project_dry_run(self, config: Config) -> None:
         """Test bootstrap_project in dry run mode."""
@@ -347,6 +347,27 @@ class TestProjectBootstrap:
             with patch("builtins.open", side_effect=IOError("Permission denied")):
                 bootstrap._modify_main_dart()  # Should not raise, just warn
 
+    def test_modify_main_dart_adds_firebase_initializer(self, config: Config) -> None:
+        """Test modifying main.dart for Firebase initialization."""
+        config.auth_provider = "firebase"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "lib").mkdir(parents=True)
+            main_dart = config.project_path / "lib" / "main.dart"
+            main_dart.write_text(
+                "import 'package:flutter/material.dart';\n"
+                "Future<void> main() async {\n"
+                "  runApp(const MyApp());\n"
+                "}\n"
+            )
+
+            bootstrap._modify_main_dart()
+
+            content = main_dart.read_text()
+            assert "firebase_initializer.dart" in content
+            assert "await initializeFirebase();" in content
+
     def test_create_vscode_config_content(self, config: Config) -> None:
         """Test VS Code configuration file content."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -377,6 +398,20 @@ class TestProjectBootstrap:
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
+            assert "generate:" not in content
+
+    def test_create_makefile_sqlite_generate_target(self, config: Config) -> None:
+        """Test Makefile includes build_runner target for SQLite projects."""
+        config.database = "sqlite"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            makefile = config.project_path / "Makefile"
+            content = makefile.read_text()
+            assert "generate:" in content
+            assert "build_runner build" in content
 
     def test_create_sample_tests_content(self, config: Config) -> None:
         """Test sample test files content."""
@@ -431,3 +466,102 @@ class TestProjectBootstrap:
             assert "make integration" in content
             assert "make analyze" in content
             assert ".env" in content
+
+    def test_create_clean_architecture_scaffold(self, config: Config) -> None:
+        """Test creating Clean Architecture scaffold."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+
+            assert (config.project_path / "lib" / "src" / "app" / "app.dart").exists()
+            assert (
+                config.project_path
+                / "lib"
+                / "src"
+                / "features"
+                / "home"
+                / "presentation"
+                / "home_screen.dart"
+            ).exists()
+            main_content = (config.project_path / "lib" / "main.dart").read_text()
+            assert "ProviderScope" in main_content
+            assert "src/app/app.dart" in main_content
+
+    def test_create_sqlite_scaffold(self, config: Config) -> None:
+        """Test creating Drift SQLite scaffold."""
+        config.database = "sqlite"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+
+            database_file = (
+                config.project_path
+                / "lib"
+                / "src"
+                / "core"
+                / "data"
+                / "app_database.dart"
+            )
+            assert database_file.exists()
+            content = database_file.read_text()
+            assert "DriftDatabase" in content
+            assert "AppSettings" in content
+
+    def test_create_mocktail_scaffold(self, config: Config) -> None:
+        """Test creating mocktail helpers."""
+        config.testing = "mocktail"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+
+            mocks_file = config.project_path / "test" / "helpers" / "mocks.dart"
+            assert mocks_file.exists()
+            assert "MockRepository" in mocks_file.read_text()
+
+    def test_create_firebase_scaffold(self, config: Config) -> None:
+        """Test creating Firebase service scaffolds."""
+        config.auth_provider = "firebase"
+        config.cloud_database = "firestore"
+        config.notifications_provider = "firebase"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+
+            firebase_dir = config.project_path / "lib" / "src" / "core" / "firebase"
+            assert (firebase_dir / "firebase_initializer.dart").exists()
+            assert (firebase_dir / "firebase_auth_service.dart").exists()
+            assert (firebase_dir / "firestore_database.dart").exists()
+            assert (firebase_dir / "firebase_notifications_service.dart").exists()
+
+    def test_dependency_selection(self, config: Config) -> None:
+        """Test dependency lists include selected starter dependencies."""
+        config.architecture = "clean"
+        config.database = "sqlite"
+        config.testing = "mocktail"
+        config.auth_provider = "firebase"
+        config.cloud_database = "firestore"
+        config.notifications_provider = "firebase"
+        bootstrap = ProjectBootstrap(config)
+
+        runtime_dependencies = bootstrap._runtime_dependencies()
+        dev_dependencies = bootstrap._dev_dependencies()
+
+        assert "flutter_riverpod" in runtime_dependencies
+        assert "drift" in runtime_dependencies
+        assert "firebase_core" in runtime_dependencies
+        assert "firebase_auth" in runtime_dependencies
+        assert "cloud_firestore" in runtime_dependencies
+        assert "firebase_messaging" in runtime_dependencies
+        assert "drift_dev" in dev_dependencies
+        assert "build_runner" in dev_dependencies
+        assert "mocktail" in dev_dependencies
