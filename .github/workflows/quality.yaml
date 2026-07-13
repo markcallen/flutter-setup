@@ -32,19 +32,13 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies with uv
-        run: |
-          # Install project dependencies (if pyproject.toml is present)
-          if [ -f pyproject.toml ]; then
-            uv pip install -e . --system
-          fi
-          # Install dev tools without adding to project
-          uv pip install black ruff mypy --system
+        run: uv pip install -e ".[dev]" --system
 
       - name: Black (check only)
-        run: uv run black --check --diff .
+        run: black --check --diff .
 
       - name: Ruff (lint)
-        run: uv run ruff check .
+        run: ruff check .
 
       - name: mypy (type check)
-        run: uv run mypy .
+        run: mypy .

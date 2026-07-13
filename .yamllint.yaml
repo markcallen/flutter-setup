@@ -1,0 +1,13 @@
+extends: default
+rules:
+  # GitHub Actions uses "on" as a top-level key; allow it as a truthy value
+  truthy:
+    allowed-values: ["true", "false", "on", "off"]
+  # GitHub Actions condition expressions can be long
+  line-length:
+    max: 160
+  # Allow files to have or omit "---" document start
+  document-start: disable
+  # Allow single space between content and inline comments
+  comments:
+    min-spaces-from-content: 1
