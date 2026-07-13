@@ -101,6 +101,7 @@ class ProjectBootstrap:
     def _detect_flutter_version(self) -> str | None:
         """Return the version string of the Flutter SDK at config.flutter_location."""
         import re
+
         flutter_bin = self.config.flutter_location / "bin" / "flutter"
         try:
             result = subprocess.run(
@@ -128,12 +129,11 @@ generate:
         # Always lock the project to the Flutter version present at creation time.
         # --flutter-version provides an explicit pin; otherwise detect from the SDK.
         ver = self.config.flutter_version or self._detect_flutter_version()
-        flutter_loc = self.config.flutter_location
 
         if ver:
             version_header = f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
             version_dep = " check-flutter-version"
-            version_target = f"""
+            version_target = """
 # Runs 'flutter pub get', which enforces the flutter SDK constraint in pubspec.yaml.
 # If the installed Flutter version doesn't satisfy the constraint, Flutter itself
 # will error with upgrade instructions.
@@ -372,7 +372,8 @@ class HomeScreen extends ConsumerWidget {
 
         main_dart = self.config.project_path / "lib" / "main.dart"
         if main_dart.exists():
-            main_dart.write_text(f"""import 'package:flutter/material.dart';
+            main_dart.write_text(
+                f"""import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -385,7 +386,8 @@ Future<void> main() async {{
 {firebase_init}\
   runApp(const ProviderScope(child: App()));
 }}
-""")
+"""
+            )
 
         console.print("  ✅ Clean Architecture scaffold created")
 
@@ -394,7 +396,8 @@ Future<void> main() async {{
         data_dir = self.config.project_path / "lib" / "src" / "core" / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
 
-        (data_dir / "app_database.dart").write_text("""import 'dart:io';
+        (data_dir / "app_database.dart").write_text(
+            """import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -427,7 +430,8 @@ LazyDatabase _openConnection() {
     return NativeDatabase.createInBackground(file);
   });
 }
-""")
+"""
+        )
 
         console.print("  ✅ SQLite persistence scaffold created")
 
