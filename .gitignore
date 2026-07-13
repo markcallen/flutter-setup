@@ -1,5 +1,6 @@
-# Claude Code session files
-.claude/
+# Claude Code — ignore session/memory files but keep project settings
+.claude/*
+!.claude/settings.json
 
 # Test coverage
 .coverage
