@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(uv sync *)",
+      "Bash(uv pip *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git ls-remote *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(git rm *)",
+      "Bash(make setup *)",
+      "Bash(uv lock *)",
+      "Bash(uv --version)",
+      "Bash(uv tree *)",
+      "Bash(make lint *)",
+      "Bash(gh api *)",
+      "Bash(make format *)"
+    ]
+  }
+}
