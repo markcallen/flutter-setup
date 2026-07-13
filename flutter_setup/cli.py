@@ -162,70 +162,6 @@ def init_config(force: bool) -> None:
         type=str,
     )
 
-    # 4. Architecture template
-    console.print("\n[bold]4. Architecture Template[/bold]")
-    if existing_config:
-        current_architecture = existing_config.get("project", {}).get(
-            "architecture", "basic"
-        )
-        console.print(f"[dim]Current: {current_architecture}[/dim]")
-    else:
-        current_architecture = "basic"
-
-    architecture = click.prompt(
-        "Architecture template",
-        default=current_architecture,
-        type=click.Choice(["basic", "clean"], case_sensitive=False),
-    )
-
-    # 5. Local database
-    console.print("\n[bold]5. Local Database[/bold]")
-    if existing_config:
-        current_database = existing_config.get("project", {}).get("database", "none")
-        console.print(f"[dim]Current: {current_database}[/dim]")
-    else:
-        current_database = "none"
-
-    database = click.prompt(
-        "Local database",
-        default=current_database,
-        type=click.Choice(["none", "sqlite"], case_sensitive=False),
-    )
-
-    # 6. Testing starter
-    console.print("\n[bold]6. Testing Starter[/bold]")
-    if existing_config:
-        current_testing = existing_config.get("project", {}).get("testing", "standard")
-        console.print(f"[dim]Current: {current_testing}[/dim]")
-    else:
-        current_testing = "standard"
-
-    testing = click.prompt(
-        "Testing starter",
-        default=current_testing,
-        type=click.Choice(["standard", "mocktail"], case_sensitive=False),
-    )
-
-    # 7. Firebase services
-    console.print("\n[bold]7. Firebase Services[/bold]")
-    project_config = existing_config.get("project", {}) if existing_config else {}
-
-    auth_provider = click.prompt(
-        "Auth provider",
-        default=project_config.get("auth_provider", "none"),
-        type=click.Choice(["none", "firebase"], case_sensitive=False),
-    )
-    cloud_database = click.prompt(
-        "Cloud database",
-        default=project_config.get("cloud_database", "none"),
-        type=click.Choice(["none", "firestore"], case_sensitive=False),
-    )
-    notifications_provider = click.prompt(
-        "Notifications provider",
-        default=project_config.get("notifications_provider", "none"),
-        type=click.Choice(["none", "firebase"], case_sensitive=False),
-    )
-
     # Build the config
     config = {
         "flutter": {
@@ -239,27 +175,6 @@ def init_config(force: bool) -> None:
         },
         "project": {
             "org": org,
-            "template": (
-                existing_config.get("project", {}).get("template", "app")
-                if existing_config
-                else "app"
-            ),
-            "architecture": architecture.lower(),
-            "database": database.lower(),
-            "testing": testing.lower(),
-            "auth_provider": auth_provider.lower(),
-            "cloud_database": cloud_database.lower(),
-            "notifications_provider": notifications_provider.lower(),
-            "ios_language": (
-                existing_config.get("project", {}).get("ios_language", "swift")
-                if existing_config
-                else "swift"
-            ),
-            "android_language": (
-                existing_config.get("project", {}).get("android_language", "kotlin")
-                if existing_config
-                else "kotlin"
-            ),
         },
     }
 
@@ -274,12 +189,6 @@ def init_config(force: bool) -> None:
     console.print(f"  Flutter location: {config['flutter']['location']}")
     console.print(f"  Flutter channel: {config['flutter']['channel']}")
     console.print(f"  Organization: {config['project']['org']}")
-    console.print(f"  Architecture: {config['project']['architecture']}")
-    console.print(f"  Database: {config['project']['database']}")
-    console.print(f"  Testing: {config['project']['testing']}")
-    console.print(f"  Auth provider: {config['project']['auth_provider']}")
-    console.print(f"  Cloud database: {config['project']['cloud_database']}")
-    console.print(f"  Notifications: {config['project']['notifications_provider']}")
     console.print(
         "\n[dim]You can edit this file directly or run 'flutter-setup init' again to update it.[/dim]"
     )
