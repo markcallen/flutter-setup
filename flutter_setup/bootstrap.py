@@ -373,8 +373,7 @@ class HomeScreen extends ConsumerWidget {
 
         main_dart = self.config.project_path / "lib" / "main.dart"
         if main_dart.exists():
-            main_dart.write_text(
-                f"""import 'package:flutter/material.dart';
+            main_dart.write_text(f"""import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -387,8 +386,7 @@ Future<void> main() async {{
 {firebase_init}\
   runApp(const ProviderScope(child: App()));
 }}
-"""
-            )
+""")
 
         console.print("  ✅ Clean Architecture scaffold created")
 
@@ -397,8 +395,7 @@ Future<void> main() async {{
         data_dir = self.config.project_path / "lib" / "src" / "core" / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
 
-        (data_dir / "app_database.dart").write_text(
-            """import 'dart:io';
+        (data_dir / "app_database.dart").write_text("""import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -431,8 +428,7 @@ LazyDatabase _openConnection() {
     return NativeDatabase.createInBackground(file);
   });
 }
-"""
-        )
+""")
 
         console.print("  ✅ SQLite persistence scaffold created")
 
