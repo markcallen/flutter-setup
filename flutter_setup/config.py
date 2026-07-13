@@ -93,6 +93,7 @@ class Config:
 
         if self.flutter_version is not None:
             import re
+
             if not re.fullmatch(r"\d+\.\d+\.\d+", self.flutter_version):
                 raise ValueError(
                     f"Invalid flutter_version '{self.flutter_version}': must be X.Y.Z (e.g. 3.24.0)"

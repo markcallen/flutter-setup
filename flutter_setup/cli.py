@@ -33,8 +33,6 @@ from .platform import detect_runtime_platform
 console = Console()
 
 
-
-
 def print_banner() -> None:
     """Print the application banner."""
     banner = """
@@ -401,7 +399,10 @@ def setup_command(
         ) -> Any:
             """Use CLI value if explicit, config file value if present, else prompt."""
             key = config_key or param_name
-            if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+            if (
+                ctx.get_parameter_source(param_name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
                 return cli_value
             if key in config_dict:
                 return config_dict[key]
@@ -438,31 +439,51 @@ def setup_command(
         merged_channel = cast(
             FlutterChannel,
             get_merged_or_prompt(
-                "channel", channel, file_flutter, "Flutter channel", choices=["stable", "beta"]
+                "channel",
+                channel,
+                file_flutter,
+                "Flutter channel",
+                choices=["stable", "beta"],
             ),
         )
         merged_template = cast(
             TemplateType,
             get_merged_or_prompt(
-                "template", template, file_project, "Project template", choices=["app", "plugin"]
+                "template",
+                template,
+                file_project,
+                "Project template",
+                choices=["app", "plugin"],
             ),
         )
         merged_architecture = cast(
             Architecture,
             get_merged_or_prompt(
-                "architecture", architecture, file_project, "Architecture", choices=["basic", "clean"]
+                "architecture",
+                architecture,
+                file_project,
+                "Architecture",
+                choices=["basic", "clean"],
             ),
         )
         merged_database = cast(
             Database,
             get_merged_or_prompt(
-                "database", database, file_project, "Local database", choices=["none", "sqlite"]
+                "database",
+                database,
+                file_project,
+                "Local database",
+                choices=["none", "sqlite"],
             ),
         )
         merged_testing = cast(
             Testing,
             get_merged_or_prompt(
-                "testing", testing, file_project, "Testing framework", choices=["standard", "mocktail"]
+                "testing",
+                testing,
+                file_project,
+                "Testing framework",
+                choices=["standard", "mocktail"],
             ),
         )
         merged_auth_provider = cast(

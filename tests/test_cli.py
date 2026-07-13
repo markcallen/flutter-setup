@@ -169,7 +169,11 @@ class TestCLI:
             mock_manager = Mock()
             mock_manager_class.return_value = mock_manager
             mock_manager.load_config.return_value = {
-                "flutter": {"location": "/flutter", "channel": "stable", "update_mode": "reset"},
+                "flutter": {
+                    "location": "/flutter",
+                    "channel": "stable",
+                    "update_mode": "reset",
+                },
                 "project": {"org": "com.mycompany"},
             }
             with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
@@ -178,10 +182,24 @@ class TestCLI:
                 # Simulate user answering prompts: project name, platforms, then
                 # template, architecture, database, testing, auth, cloud_db, notifications,
                 # ios_language, android_language
-                user_input = "\n".join(
-                    ["MyApp", "ios android", "app", "clean", "sqlite", "mocktail",
-                     "none", "none", "none", "swift", "kotlin"]
-                ) + "\n"
+                user_input = (
+                    "\n".join(
+                        [
+                            "MyApp",
+                            "ios android",
+                            "app",
+                            "clean",
+                            "sqlite",
+                            "mocktail",
+                            "none",
+                            "none",
+                            "none",
+                            "swift",
+                            "kotlin",
+                        ]
+                    )
+                    + "\n"
+                )
                 result = runner.invoke(cli, ["setup"], input=user_input)
                 assert result.exit_code == 0
                 config = mock_setup_class.call_args.args[0]
