@@ -22,10 +22,11 @@ flutter-setup = "flutter_setup.cli:main"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "black>=26.3.1",
     "mypy>=1.20.1",
+    "pre-commit>=4.0.0",
     "ruff>=0.15.10",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
