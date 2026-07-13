@@ -1,6 +1,6 @@
 # Claude Code — ignore session/memory files but keep project settings
-.claude/*
-!.claude/settings.json
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # Test coverage
 .coverage
