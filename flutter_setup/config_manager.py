@@ -43,7 +43,7 @@ class ConfigManager:
             "flutter": {
                 "location": default_flutter_location,
                 "channel": "stable",
-                "update_mode": "reset",
+                "update_mode": "skip",
             },
             "project": {
                 "org": "com.example",

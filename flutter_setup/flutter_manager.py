@@ -60,14 +60,57 @@ class FlutterManager:
         # Check if Flutter is already installed
         if not self.flutter_root.exists() or not (self.flutter_root / ".git").exists():
             self._install_flutter()
+        elif self.config.flutter_update_mode == "skip":
+            console.print("  ⏭️  Skipping Flutter SDK update (update mode: skip)")
         else:
             self._update_flutter()
+
+        # Verify version constraint before proceeding
+        if self.config.flutter_version:
+            self._check_flutter_version()
 
         # Ensure Flutter is in PATH
         self._ensure_flutter_path()
 
         # Run flutter doctor
         self._run_flutter_doctor()
+
+    def _get_current_flutter_version(self) -> str | None:
+        """Return the installed Flutter version string, or None if not detectable."""
+        flutter_bin = self.flutter_root / "bin" / "flutter"
+        try:
+            result = subprocess.run(
+                [str(flutter_bin), "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            match = re.search(r"Flutter\s+([\d.]+)", result.stdout)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return None
+
+    def _check_flutter_version(self) -> None:
+        """Raise FlutterInstallationError if the installed version doesn't match config.flutter_version."""
+        required = self.config.flutter_version
+        if not required:
+            return
+
+        current = self._get_current_flutter_version()
+        if current is None:
+            raise FlutterInstallationError(
+                f"Could not determine Flutter version. "
+                f"Ensure Flutter is installed at {self.flutter_root}."
+            )
+        if current != required:
+            raise FlutterInstallationError(
+                f"Flutter version mismatch: found {current}, requires {required}.\n"
+                f"  To switch: git -C {self.flutter_root} fetch && "
+                f"git -C {self.flutter_root} checkout {required}"
+            )
+        console.print(f"  ✅ Flutter {current} matches required version")
 
     def _reclone_flutter(self) -> None:
         """Reclone Flutter repository."""

@@ -55,6 +55,11 @@ class ProjectBootstrap:
         # Create environment support
         self._create_environment_support()
 
+        # Pin Flutter SDK version in pubspec.yaml
+        ver = self.config.flutter_version or self._detect_flutter_version()
+        if ver:
+            self._pin_flutter_sdk_version(ver)
+
         # Create README
         self._create_readme()
 
@@ -93,6 +98,24 @@ class ProjectBootstrap:
 
         console.print("  ✅ VS Code/Cursor configuration created")
 
+    def _detect_flutter_version(self) -> str | None:
+        """Return the version string of the Flutter SDK at config.flutter_location."""
+        import re
+        flutter_bin = self.config.flutter_location / "bin" / "flutter"
+        try:
+            result = subprocess.run(
+                [str(flutter_bin), "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            match = re.search(r"Flutter\s+([\d.]+)", result.stdout)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return None
+
     def _create_makefile(self) -> None:
         """Create Makefile with common commands."""
         generate_target = ""
@@ -102,24 +125,46 @@ generate:
 	dart run build_runner build --delete-conflicting-outputs
 """
 
-        makefile_content = f"""run:
-	flutter run -d chrome
+        # Always lock the project to the Flutter version present at creation time.
+        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+        ver = self.config.flutter_version or self._detect_flutter_version()
+        flutter_loc = self.config.flutter_location
 
-run_ios:
-	flutter run -d ios
+        if ver:
+            version_header = f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
+            version_dep = " check-flutter-version"
+            version_target = f"""
+# Runs 'flutter pub get', which enforces the flutter SDK constraint in pubspec.yaml.
+# If the installed Flutter version doesn't satisfy the constraint, Flutter itself
+# will error with upgrade instructions.
+check-flutter-version:
+\tflutter pub get
 
-run_android:
-	flutter run -d android
+.PHONY: check-flutter-version
+"""
+        else:
+            version_header = ""
+            version_dep = ""
+            version_target = ""
 
-analyze:
-	flutter analyze
+        makefile_content = f"""{version_header}run:{version_dep}
+\tflutter run -d chrome
 
-test:
-	flutter test
+run_ios:{version_dep}
+\tflutter run -d ios
 
-integration:
-	flutter test integration_test
-{generate_target}"""
+run_android:{version_dep}
+\tflutter run -d android
+
+analyze:{version_dep}
+\tflutter analyze
+
+test:{version_dep}
+\tflutter test
+
+integration:{version_dep}
+\tflutter test integration_test
+{generate_target}{version_target}"""
 
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
@@ -549,6 +594,28 @@ class FirebaseNotificationsService {
             dependencies.append("mocktail")
 
         return dependencies
+
+    def _pin_flutter_sdk_version(self, version: str) -> None:
+        """Set the flutter SDK constraint in pubspec.yaml to >= the given version."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            console.print("  ⚠️  pubspec.yaml not found, skipping Flutter version pin")
+            return
+
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+
+            if "environment" not in pubspec:
+                pubspec["environment"] = {}
+            pubspec["environment"]["flutter"] = f">={version}"
+
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+
+            console.print(f"  ✅ Pinned flutter SDK to >={version} in pubspec.yaml")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to pin Flutter version in pubspec.yaml: {e}")
 
     def _add_integration_test_sdk_dependency(self) -> None:
         """Add integration_test as an SDK dependency to pubspec.yaml."""

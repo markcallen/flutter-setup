@@ -41,6 +41,7 @@ class Config:
     auth_provider: AuthProvider = "none"
     cloud_database: CloudDatabase = "none"
     notifications_provider: NotificationsProvider = "none"
+    flutter_version: str | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -89,6 +90,13 @@ class Config:
             raise ValueError(
                 f"Invalid notifications provider: {self.notifications_provider}"
             )
+
+        if self.flutter_version is not None:
+            import re
+            if not re.fullmatch(r"\d+\.\d+\.\d+", self.flutter_version):
+                raise ValueError(
+                    f"Invalid flutter_version '{self.flutter_version}': must be X.Y.Z (e.g. 3.24.0)"
+                )
 
     @property
     def project_path(self) -> Path:

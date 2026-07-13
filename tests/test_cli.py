@@ -143,6 +143,14 @@ class TestCLI:
                         "firestore",
                         "--notifications-provider",
                         "firebase",
+                        "--template",
+                        "app",
+                        "--ios-language",
+                        "swift",
+                        "--android-language",
+                        "kotlin",
+                        "--flutter-update",
+                        "reset",
                     ],
                 )
                 assert result.exit_code == 0
@@ -154,11 +162,68 @@ class TestCLI:
                 assert config.cloud_database == "firestore"
                 assert config.notifications_provider == "firebase"
 
-    def test_setup_command_no_platforms(self) -> None:
-        """Test setup_command with no platforms."""
+    def test_setup_command_interactive_prompts(self) -> None:
+        """Test setup_command prompts for project name, platforms, and options not in config."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["setup", "TestApp"])
-        assert result.exit_code != 0
+        with patch("flutter_setup.cli.ConfigManager") as mock_manager_class:
+            mock_manager = Mock()
+            mock_manager_class.return_value = mock_manager
+            mock_manager.load_config.return_value = {
+                "flutter": {"location": "/flutter", "channel": "stable", "update_mode": "reset"},
+                "project": {"org": "com.mycompany"},
+            }
+            with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                mock_setup = Mock()
+                mock_setup_class.return_value = mock_setup
+                # Simulate user answering prompts: project name, platforms, then
+                # template, architecture, database, testing, auth, cloud_db, notifications,
+                # ios_language, android_language
+                user_input = "\n".join(
+                    ["MyApp", "ios android", "app", "clean", "sqlite", "mocktail",
+                     "none", "none", "none", "swift", "kotlin"]
+                ) + "\n"
+                result = runner.invoke(cli, ["setup"], input=user_input)
+                assert result.exit_code == 0
+                config = mock_setup_class.call_args.args[0]
+                assert config.project_name == "MyApp"
+                assert config.platforms == ["ios", "android"]
+                assert config.org == "com.mycompany"
+                assert config.architecture == "clean"
+                assert config.database == "sqlite"
+                assert config.testing == "mocktail"
+
+    def test_setup_command_no_platforms_prompts(self) -> None:
+        """Test setup_command prompts for platforms when not provided."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_manager_class:
+            mock_manager = Mock()
+            mock_manager_class.return_value = mock_manager
+            mock_manager.load_config.return_value = {
+                "flutter": {
+                    "location": "/flutter",
+                    "channel": "stable",
+                    "update_mode": "reset",
+                },
+                "project": {
+                    "org": "com.example",
+                    "template": "app",
+                    "architecture": "basic",
+                    "database": "none",
+                    "testing": "standard",
+                    "auth_provider": "none",
+                    "cloud_database": "none",
+                    "notifications_provider": "none",
+                    "ios_language": "swift",
+                    "android_language": "kotlin",
+                },
+            }
+            with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                mock_setup = Mock()
+                mock_setup_class.return_value = mock_setup
+                result = runner.invoke(cli, ["setup", "TestApp"], input="ios android\n")
+                assert result.exit_code == 0
+                config = mock_setup_class.call_args.args[0]
+                assert config.platforms == ["ios", "android"]
 
     def test_setup_command_flutter_setup_error(self) -> None:
         """Test setup_command with FlutterSetupError."""
@@ -167,8 +232,23 @@ class TestCLI:
             mock_manager = Mock()
             mock_manager_class.return_value = mock_manager
             mock_manager.load_config.return_value = {
-                "flutter": {"location": "/flutter", "channel": "stable"},
-                "project": {"org": "com.example"},
+                "flutter": {
+                    "location": "/flutter",
+                    "channel": "stable",
+                    "update_mode": "reset",
+                },
+                "project": {
+                    "org": "com.example",
+                    "template": "app",
+                    "architecture": "basic",
+                    "database": "none",
+                    "testing": "standard",
+                    "auth_provider": "none",
+                    "cloud_database": "none",
+                    "notifications_provider": "none",
+                    "ios_language": "swift",
+                    "android_language": "kotlin",
+                },
             }
             with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
                 mock_setup = Mock()
@@ -184,8 +264,23 @@ class TestCLI:
             mock_manager = Mock()
             mock_manager_class.return_value = mock_manager
             mock_manager.load_config.return_value = {
-                "flutter": {"location": "/flutter", "channel": "stable"},
-                "project": {"org": "com.example"},
+                "flutter": {
+                    "location": "/flutter",
+                    "channel": "stable",
+                    "update_mode": "reset",
+                },
+                "project": {
+                    "org": "com.example",
+                    "template": "app",
+                    "architecture": "basic",
+                    "database": "none",
+                    "testing": "standard",
+                    "auth_provider": "none",
+                    "cloud_database": "none",
+                    "notifications_provider": "none",
+                    "ios_language": "swift",
+                    "android_language": "kotlin",
+                },
             }
             with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
                 mock_setup = Mock()
