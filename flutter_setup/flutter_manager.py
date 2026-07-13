@@ -85,7 +85,8 @@ class FlutterManager:
                 text=True,
                 check=False,
             )
-            match = re.search(r"Flutter\s+([\d.]+)", result.stdout)
+            output = result.stdout or result.stderr or ""
+            match = re.search(r"Flutter\s+([\d.]+)", output)
             if match:
                 return match.group(1)
         except Exception:
@@ -93,7 +94,7 @@ class FlutterManager:
         return None
 
     def _check_flutter_version(self) -> None:
-        """Raise FlutterInstallationError if the installed version doesn't match config.flutter_version."""
+        """Raise FlutterInstallationError if the installed version is older than config.flutter_version."""
         required = self.config.flutter_version
         if not required:
             return
@@ -104,13 +105,17 @@ class FlutterManager:
                 f"Could not determine Flutter version. "
                 f"Ensure Flutter is installed at {self.flutter_root}."
             )
-        if current != required:
+
+        def parse(v: str) -> tuple[int, ...]:
+            return tuple(int(x) for x in v.split("."))
+
+        if parse(current) < parse(required):
             raise FlutterInstallationError(
-                f"Flutter version mismatch: found {current}, requires {required}.\n"
-                f"  To switch: git -C {self.flutter_root} fetch && "
+                f"Flutter version too old: found {current}, requires >={required}.\n"
+                f"  To upgrade: git -C {self.flutter_root} fetch && "
                 f"git -C {self.flutter_root} checkout {required}"
             )
-        console.print(f"  ✅ Flutter {current} matches required version")
+        console.print(f"  ✅ Flutter {current} satisfies >={required}")
 
     def _reclone_flutter(self) -> None:
         """Reclone Flutter repository."""

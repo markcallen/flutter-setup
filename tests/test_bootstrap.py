@@ -565,3 +565,138 @@ class TestProjectBootstrap:
         assert "drift_dev" in dev_dependencies
         assert "build_runner" in dev_dependencies
         assert "mocktail" in dev_dependencies
+
+    # --- _detect_flutter_version ---
+
+    def test_detect_flutter_version_from_stdout(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Version is read from stdout."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="Flutter 3.24.0 • channel stable", stderr=""
+            )
+            assert bootstrap._detect_flutter_version() == "3.24.0"
+
+    def test_detect_flutter_version_from_stderr(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Version falls back to stderr when stdout is empty."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="", stderr="Flutter 3.22.1 • channel stable"
+            )
+            assert bootstrap._detect_flutter_version() == "3.22.1"
+
+    def test_detect_flutter_version_not_found(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Returns None when the version cannot be parsed."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="", stderr="")
+            assert bootstrap._detect_flutter_version() is None
+
+    def test_detect_flutter_version_subprocess_error(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Returns None when subprocess raises."""
+        with patch("subprocess.run", side_effect=OSError("not found")):
+            assert bootstrap._detect_flutter_version() is None
+
+    # --- _pin_flutter_sdk_version ---
+
+    def test_pin_flutter_sdk_version_writes_constraint(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Writes environment.flutter >= constraint into pubspec.yaml."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        pubspec_path = project_dir / "pubspec.yaml"
+        pubspec_path.write_text("name: test_app\nenvironment:\n  sdk: '>=3.4.0'\n")
+
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")
+
+        with open(pubspec_path) as f:
+            pubspec = yaml.safe_load(f)
+        assert pubspec["environment"]["flutter"] == ">=3.24.0"
+        assert pubspec["environment"]["sdk"] == ">=3.4.0"  # preserved
+
+    def test_pin_flutter_sdk_version_creates_environment_section(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Creates environment section if absent."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        pubspec_path = project_dir / "pubspec.yaml"
+        pubspec_path.write_text("name: test_app\n")
+
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")
+
+        with open(pubspec_path) as f:
+            pubspec = yaml.safe_load(f)
+        assert pubspec["environment"]["flutter"] == ">=3.24.0"
+
+    def test_pin_flutter_sdk_version_missing_pubspec(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Does not raise when pubspec.yaml does not exist."""
+        config.output_dir = tmp_path
+        (tmp_path / config.project_name).mkdir()
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")  # should not raise
+
+    # --- Makefile version check target ---
+
+    def test_create_makefile_with_detected_version(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Makefile includes check-flutter-version when a version is detected."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "FLUTTER_REQUIRED_VERSION := 3.24.0" in makefile
+        assert "check-flutter-version" in makefile
+        assert "flutter pub get" in makefile
+        assert "run: check-flutter-version" in makefile
+
+    def test_create_makefile_explicit_version_overrides_detected(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Explicit flutter_version takes precedence over detected version."""
+        config.output_dir = tmp_path
+        config.flutter_version = "3.22.0"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "FLUTTER_REQUIRED_VERSION := 3.22.0" in makefile
+
+    def test_create_makefile_no_version_check_when_undetectable(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Makefile has no version check when Flutter version cannot be detected."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value=None):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "check-flutter-version" not in makefile
+        assert "FLUTTER_REQUIRED_VERSION" not in makefile

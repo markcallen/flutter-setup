@@ -110,7 +110,8 @@ class ProjectBootstrap:
                 text=True,
                 check=False,
             )
-            match = re.search(r"Flutter\s+([\d.]+)", result.stdout)
+            output = result.stdout or result.stderr or ""
+            match = re.search(r"Flutter\s+([\d.]+)", output)
             if match:
                 return match.group(1)
         except Exception:

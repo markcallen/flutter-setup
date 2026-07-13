@@ -133,7 +133,8 @@ def init_config(force: bool) -> None:
         type=str,
     )
 
-    # Build the config
+    # Build the config, preserving any existing project settings not covered by init prompts
+    existing_project = existing_config.get("project", {}) if existing_config else {}
     config = {
         "flutter": {
             "location": str(flutter_location),
@@ -146,6 +147,17 @@ def init_config(force: bool) -> None:
         },
         "project": {
             "org": org,
+            "template": existing_project.get("template", "app"),
+            "architecture": existing_project.get("architecture", "basic"),
+            "database": existing_project.get("database", "none"),
+            "testing": existing_project.get("testing", "standard"),
+            "auth_provider": existing_project.get("auth_provider", "none"),
+            "cloud_database": existing_project.get("cloud_database", "none"),
+            "notifications_provider": existing_project.get(
+                "notifications_provider", "none"
+            ),
+            "ios_language": existing_project.get("ios_language", "swift"),
+            "android_language": existing_project.get("android_language", "kotlin"),
         },
     }
 
@@ -397,7 +409,7 @@ def setup_command(
             choices: list[str] | None = None,
             config_key: str | None = None,
         ) -> Any:
-            """Use CLI value if explicit, config file value if present, else prompt."""
+            """Use CLI value if explicit, config file value if present and valid, else prompt."""
             key = config_key or param_name
             if (
                 ctx.get_parameter_source(param_name)
@@ -405,7 +417,10 @@ def setup_command(
             ):
                 return cli_value
             if key in config_dict:
-                return config_dict[key]
+                value = config_dict[key]
+                if choices is None or value in choices:
+                    return value
+                # Config value is invalid — fall through to prompt
             if choices:
                 return click.prompt(
                     prompt_text,
@@ -413,6 +428,21 @@ def setup_command(
                     type=click.Choice(choices, case_sensitive=False),
                 )
             return click.prompt(prompt_text, default=cli_value)
+
+        def get_merged(
+            param_name: str,
+            cli_value: Any,
+            config_dict: Dict[str, Any],
+            config_key: str | None = None,
+        ) -> Any:
+            """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
+            key = config_key or param_name
+            if (
+                ctx.get_parameter_source(param_name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
+                return cli_value
+            return config_dict.get(key, cli_value)
 
         # Prompt for required arguments if not provided on the command line
         if project_name is None:
@@ -516,26 +546,36 @@ def setup_command(
                 choices=["none", "firebase"],
             ),
         )
-        merged_ios_language = cast(
-            IosLanguage,
-            get_merged_or_prompt(
-                "ios_language",
-                ios_language,
-                file_project,
-                "iOS language (plugin only)",
-                choices=["swift", "objc"],
-            ),
-        )
-        merged_android_language = cast(
-            AndroidLanguage,
-            get_merged_or_prompt(
-                "android_language",
-                android_language,
-                file_project,
-                "Android language (plugin only)",
-                choices=["kotlin", "java"],
-            ),
-        )
+        # Language options only apply to plugin templates; never prompt for app projects
+        if merged_template == "plugin":
+            merged_ios_language = cast(
+                IosLanguage,
+                get_merged_or_prompt(
+                    "ios_language",
+                    ios_language,
+                    file_project,
+                    "iOS language",
+                    choices=["swift", "objc"],
+                ),
+            )
+            merged_android_language = cast(
+                AndroidLanguage,
+                get_merged_or_prompt(
+                    "android_language",
+                    android_language,
+                    file_project,
+                    "Android language",
+                    choices=["kotlin", "java"],
+                ),
+            )
+        else:
+            merged_ios_language = cast(
+                IosLanguage, get_merged("ios_language", ios_language, file_project)
+            )
+            merged_android_language = cast(
+                AndroidLanguage,
+                get_merged("android_language", android_language, file_project),
+            )
         merged_flutter_update = cast(
             UpdateMode,
             get_merged_or_prompt(

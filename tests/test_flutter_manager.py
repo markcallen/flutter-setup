@@ -300,3 +300,122 @@ class TestFlutterManager:
 
                 mock_run.side_effect = run_side_effect
                 assert manager.check_only() is False
+
+    # --- _get_current_flutter_version ---
+
+    def test_get_current_flutter_version_from_stdout(
+        self, manager: FlutterManager
+    ) -> None:
+        """Version is parsed from stdout."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="Flutter 3.24.0 • channel stable", stderr=""
+            )
+            assert manager._get_current_flutter_version() == "3.24.0"
+
+    def test_get_current_flutter_version_from_stderr(
+        self, manager: FlutterManager
+    ) -> None:
+        """Version falls back to stderr when stdout is empty."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="", stderr="Flutter 3.22.1 • channel stable"
+            )
+            assert manager._get_current_flutter_version() == "3.22.1"
+
+    def test_get_current_flutter_version_not_found(
+        self, manager: FlutterManager
+    ) -> None:
+        """Returns None when neither stdout nor stderr contains a version."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="", stderr="")
+            assert manager._get_current_flutter_version() is None
+
+    def test_get_current_flutter_version_subprocess_error(
+        self, manager: FlutterManager
+    ) -> None:
+        """Returns None when subprocess raises."""
+        with patch("subprocess.run", side_effect=OSError("no flutter")):
+            assert manager._get_current_flutter_version() is None
+
+    # --- _check_flutter_version ---
+
+    def test_check_flutter_version_no_constraint(self, manager: FlutterManager) -> None:
+        """No flutter_version constraint → check is a no-op."""
+        manager.config.flutter_version = None
+        with patch.object(manager, "_get_current_flutter_version") as mock_get:
+            manager._check_flutter_version()
+            mock_get.assert_not_called()
+
+    def test_check_flutter_version_exact_match_passes(
+        self, manager: FlutterManager
+    ) -> None:
+        """Exact match satisfies >= constraint."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.24.0"
+        ):
+            manager._check_flutter_version()  # should not raise
+
+    def test_check_flutter_version_newer_passes(self, manager: FlutterManager) -> None:
+        """A newer installed version satisfies the >= constraint."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.25.1"
+        ):
+            manager._check_flutter_version()  # should not raise
+
+    def test_check_flutter_version_older_fails(self, manager: FlutterManager) -> None:
+        """An older installed version raises FlutterInstallationError."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.22.3"
+        ):
+            with pytest.raises(FlutterInstallationError, match="version too old"):
+                manager._check_flutter_version()
+
+    def test_check_flutter_version_undetectable_fails(
+        self, manager: FlutterManager
+    ) -> None:
+        """Undetectable version raises FlutterInstallationError."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(manager, "_get_current_flutter_version", return_value=None):
+            with pytest.raises(FlutterInstallationError, match="Could not determine"):
+                manager._check_flutter_version()
+
+    # --- ensure_flutter skip mode ---
+
+    def test_ensure_flutter_skip_mode_does_not_update(
+        self, manager: FlutterManager
+    ) -> None:
+        """In skip mode with SDK present, _update_flutter is never called."""
+        manager.config.flutter_update_mode = "skip"
+        mock_root = MagicMock()
+        mock_root.exists.return_value = True
+        mock_git = MagicMock()
+        mock_git.exists.return_value = True
+        mock_root.__truediv__.return_value = mock_git
+        manager.flutter_root = mock_root
+        with patch.object(manager, "_update_flutter") as mock_update:
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_update.assert_not_called()
+
+    def test_ensure_flutter_version_check_called_when_constraint_set(
+        self, manager: FlutterManager
+    ) -> None:
+        """_check_flutter_version is called when flutter_version is set."""
+        manager.config.flutter_update_mode = "skip"
+        manager.config.flutter_version = "3.24.0"
+        mock_root = MagicMock()
+        mock_root.exists.return_value = True
+        mock_git = MagicMock()
+        mock_git.exists.return_value = True
+        mock_root.__truediv__.return_value = mock_git
+        manager.flutter_root = mock_root
+        with patch.object(manager, "_check_flutter_version") as mock_check:
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_check.assert_called_once()
