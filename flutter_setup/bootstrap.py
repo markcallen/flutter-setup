@@ -163,10 +163,10 @@ check-flutter-version:
         if "web" in self.config.platforms:
             web_target = f"run-chrome:{version_dep}\n\t{flutter_cmd} run -d chrome\n\n"
 
-        makefile_content = f"""{version_header}{web_target}run_ios:{version_dep}
+        makefile_content = f"""{version_header}{web_target}run-ios:{version_dep}
 \t{flutter_cmd} run -d ios
 
-run_android:{version_dep}
+run-android:{version_dep}
 \t{flutter_cmd} run -d android
 
 analyze:{version_dep}
@@ -769,9 +769,9 @@ API_URL=https://api.example.com
         if "web" in self.config.platforms:
             run_cmd = "make run-chrome      # runs on Chrome"
         elif "ios" in self.config.platforms:
-            run_cmd = "make run_ios         # runs on iOS simulator"
+            run_cmd = "make run-ios         # runs on iOS simulator"
         elif "android" in self.config.platforms:
-            run_cmd = "make run_android     # runs on Android emulator"
+            run_cmd = "make run-android     # runs on Android emulator"
         else:
             run_cmd = "flutter run"
 

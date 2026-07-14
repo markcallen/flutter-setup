@@ -393,8 +393,8 @@ class TestProjectBootstrap:
             makefile = config.project_path / "Makefile"
             content = makefile.read_text()
             assert "run-chrome:" not in content
-            assert "run_ios:" in content
-            assert "run_android:" in content
+            assert "run-ios:" in content
+            assert "run-android:" in content
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
@@ -474,7 +474,7 @@ class TestProjectBootstrap:
             content = readme.read_text()
             assert config.project_name in content
             assert "flutter pub get" in content
-            assert "make run_ios" in content
+            assert "make run-ios" in content
             assert "make test" in content
             assert "make integration" in content
             assert "make analyze" in content
@@ -683,7 +683,7 @@ class TestProjectBootstrap:
         assert "check-flutter-version" in makefile
         assert "$(FLUTTER_REQUIRED_VERSION)" in makefile
         assert "$(FLUTTER) run" in makefile
-        assert "run_ios: check-flutter-version" in makefile
+        assert "run-ios: check-flutter-version" in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(
         self, config: Config, tmp_path: Path
