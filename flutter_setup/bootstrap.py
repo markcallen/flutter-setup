@@ -159,10 +159,11 @@ check-flutter-version:
 
         flutter_cmd = "$(FLUTTER)" if ver else "flutter"
 
-        makefile_content = f"""{version_header}run:{version_dep}
-\t{flutter_cmd} run -d chrome
+        web_target = ""
+        if "web" in self.config.platforms:
+            web_target = f"run-chrome:{version_dep}\n\t{flutter_cmd} run -d chrome\n\n"
 
-run_ios:{version_dep}
+        makefile_content = f"""{version_header}{web_target}run_ios:{version_dep}
 \t{flutter_cmd} run -d ios
 
 run_android:{version_dep}
@@ -765,6 +766,15 @@ API_URL=https://api.example.com
 
     def _create_readme(self) -> None:
         """Create README file."""
+        if "web" in self.config.platforms:
+            run_cmd = "make run-chrome      # runs on Chrome"
+        elif "ios" in self.config.platforms:
+            run_cmd = "make run_ios         # runs on iOS simulator"
+        elif "android" in self.config.platforms:
+            run_cmd = "make run_android     # runs on Android emulator"
+        else:
+            run_cmd = "flutter run"
+
         readme_content = f"""# {self.config.project_name}
 
 Flutter app scaffolded for Cursor.
@@ -772,7 +782,7 @@ Flutter app scaffolded for Cursor.
 ## Quickstart
 ```bash
 flutter pub get
-make run            # runs on Chrome by default
+{run_cmd}
 ```
 
 ## Testing

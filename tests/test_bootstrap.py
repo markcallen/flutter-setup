@@ -89,7 +89,7 @@ class TestProjectBootstrap:
             makefile = config.project_path / "Makefile"
             assert makefile.exists()
             content = makefile.read_text()
-            assert "run:" in content
+            assert "run-chrome:" not in content
             assert "analyze:" in content
 
     def test_create_test_structure(self, config: Config) -> None:
@@ -392,13 +392,26 @@ class TestProjectBootstrap:
             bootstrap._create_makefile()
             makefile = config.project_path / "Makefile"
             content = makefile.read_text()
-            assert "run:" in content
+            assert "run-chrome:" not in content
             assert "run_ios:" in content
             assert "run_android:" in content
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
             assert "generate:" not in content
+
+    def test_create_makefile_web_run_chrome(self, config: Config) -> None:
+        """Test Makefile includes run-chrome target only when web platform is selected."""
+        config.platforms = ["web"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            makefile = config.project_path / "Makefile"
+            content = makefile.read_text()
+            assert "run-chrome:" in content
+            assert "flutter run -d chrome" in content
 
     def test_create_makefile_sqlite_generate_target(self, config: Config) -> None:
         """Test Makefile includes build_runner target for SQLite projects."""
@@ -461,7 +474,7 @@ class TestProjectBootstrap:
             content = readme.read_text()
             assert config.project_name in content
             assert "flutter pub get" in content
-            assert "make run" in content
+            assert "make run_ios" in content
             assert "make test" in content
             assert "make integration" in content
             assert "make analyze" in content
@@ -670,7 +683,7 @@ class TestProjectBootstrap:
         assert "check-flutter-version" in makefile
         assert "$(FLUTTER_REQUIRED_VERSION)" in makefile
         assert "$(FLUTTER) run" in makefile
-        assert "run: check-flutter-version" in makefile
+        assert "run_ios: check-flutter-version" in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(
         self, config: Config, tmp_path: Path
