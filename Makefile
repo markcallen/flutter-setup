@@ -25,6 +25,7 @@ check-deps:
 	@echo "OK: uv, git, and Python 3.12+ all present"
 
 setup: check-deps
+	uv sync
 	uv pip install -e ".[dev]"
 	uv run pre-commit install
 	@echo ""
