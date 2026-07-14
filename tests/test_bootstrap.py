@@ -665,8 +665,11 @@ class TestProjectBootstrap:
 
         makefile = (project_dir / "Makefile").read_text()
         assert "FLUTTER_REQUIRED_VERSION := 3.24.0" in makefile
+        assert f"FLUTTER_HOME := {config.flutter_location}" in makefile
+        assert "FLUTTER := $(FLUTTER_HOME)/bin/flutter" in makefile
         assert "check-flutter-version" in makefile
-        assert "flutter pub get" in makefile
+        assert "$(FLUTTER_REQUIRED_VERSION)" in makefile
+        assert "$(FLUTTER) run" in makefile
         assert "run: check-flutter-version" in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(

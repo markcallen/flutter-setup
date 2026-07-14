@@ -66,12 +66,17 @@ def init_config(force: bool) -> None:
     # Load existing config if it exists
     existing_config = None
     if config_manager.config_file.exists():
-        if not force:
+        if force:
+            config_manager.config_file.unlink()
+            console.print(
+                f"[yellow]Deleted existing config: {config_manager.config_file}[/yellow]\n"
+            )
+        else:
             console.print(
                 f"[yellow]⚠️  Config file already exists at: {config_manager.config_file}[/yellow]"
             )
             console.print("[dim]Loading existing configuration for editing...[/dim]\n")
-        existing_config = config_manager.load_config()
+            existing_config = config_manager.load_config()
 
     # Start interactive configuration
     console.print("[bold blue]Flutter Setup Configuration[/bold blue]\n")
@@ -148,16 +153,21 @@ def init_config(force: bool) -> None:
         "project": {
             "org": org,
             "template": existing_project.get("template", "app"),
-            "architecture": existing_project.get("architecture", "basic"),
-            "database": existing_project.get("database", "none"),
-            "testing": existing_project.get("testing", "standard"),
-            "auth_provider": existing_project.get("auth_provider", "none"),
-            "cloud_database": existing_project.get("cloud_database", "none"),
-            "notifications_provider": existing_project.get(
-                "notifications_provider", "none"
-            ),
-            "ios_language": existing_project.get("ios_language", "swift"),
-            "android_language": existing_project.get("android_language", "kotlin"),
+            # setup-owned fields: only carry forward if already written by a prior setup run
+            **{
+                k: existing_project[k]
+                for k in [
+                    "architecture",
+                    "database",
+                    "testing",
+                    "auth_provider",
+                    "cloud_database",
+                    "notifications_provider",
+                    "ios_language",
+                    "android_language",
+                ]
+                if k in existing_project
+            },
         },
     }
 

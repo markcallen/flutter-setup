@@ -26,17 +26,7 @@ class TestCLI:
             mock_manager.detect_flutter_location.return_value = Path("/flutter")
             with patch(
                 "click.prompt",
-                side_effect=[
-                    "/flutter",
-                    "stable",
-                    "com.test",
-                    "basic",
-                    "none",
-                    "standard",
-                    "none",
-                    "none",
-                    "none",
-                ],
+                side_effect=["/flutter", "stable", "com.test"],
             ):
                 result = runner.invoke(cli, ["init"])
                 assert result.exit_code == 0
@@ -54,17 +44,7 @@ class TestCLI:
             }
             with patch(
                 "click.prompt",
-                side_effect=[
-                    "/flutter",
-                    "stable",
-                    "com.test",
-                    "clean",
-                    "sqlite",
-                    "mocktail",
-                    "firebase",
-                    "firestore",
-                    "firebase",
-                ],
+                side_effect=["/flutter", "stable", "com.test"],
             ):
                 result = runner.invoke(cli, ["init"])
                 assert result.exit_code == 0

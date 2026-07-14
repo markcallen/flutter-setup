@@ -130,16 +130,25 @@ generate:
         # Always lock the project to the Flutter version present at creation time.
         # --flutter-version provides an explicit pin; otherwise detect from the SDK.
         ver = self.config.flutter_version or self._detect_flutter_version()
+        flutter_home = str(self.config.flutter_location)
 
         if ver:
-            version_header = f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
+            version_header = (
+                f"FLUTTER_HOME := {flutter_home}\n"
+                f"FLUTTER := $(FLUTTER_HOME)/bin/flutter\n"
+                f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
+            )
             version_dep = " check-flutter-version"
             version_target = """
-# Runs 'flutter pub get', which enforces the flutter SDK constraint in pubspec.yaml.
-# If the installed Flutter version doesn't satisfy the constraint, Flutter itself
-# will error with upgrade instructions.
 check-flutter-version:
-\tflutter pub get
+\t@CURRENT=$$($(FLUTTER) --version 2>/dev/null | head -1 | awk '{print $$2}'); \\
+\tif [ "$$CURRENT" != "$(FLUTTER_REQUIRED_VERSION)" ]; then \\
+\t\techo "Flutter version mismatch: installed=$$CURRENT required=$(FLUTTER_REQUIRED_VERSION)"; \\
+\t\techo "Switch versions with: flutter upgrade or install Flutter $(FLUTTER_REQUIRED_VERSION) from https://docs.flutter.dev/release/archive"; \\
+\t\texit 1; \\
+\telse \\
+\t\techo "Flutter $$CURRENT ok"; \\
+\tfi
 
 .PHONY: check-flutter-version
 """
@@ -148,23 +157,31 @@ check-flutter-version:
             version_dep = ""
             version_target = ""
 
+        flutter_cmd = "$(FLUTTER)" if ver else "flutter"
+
         makefile_content = f"""{version_header}run:{version_dep}
-\tflutter run -d chrome
+\t{flutter_cmd} run -d chrome
 
 run_ios:{version_dep}
-\tflutter run -d ios
+\t{flutter_cmd} run -d ios
 
 run_android:{version_dep}
-\tflutter run -d android
+\t{flutter_cmd} run -d android
 
 analyze:{version_dep}
-\tflutter analyze
+\t{flutter_cmd} analyze
 
 test:{version_dep}
-\tflutter test
+\t{flutter_cmd} test
 
 integration:{version_dep}
-\tflutter test integration_test
+\t{flutter_cmd} test integration_test
+
+upgrade:
+\t{flutter_cmd} pub upgrade
+
+upgrade-check:
+\t{flutter_cmd} pub get
 {generate_target}{version_target}"""
 
         with open(self.config.project_path / "Makefile", "w") as f:
