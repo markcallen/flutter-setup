@@ -72,6 +72,10 @@ class FlutterManager:
         # Ensure Flutter is in PATH
         self._ensure_flutter_path()
 
+        # Ensure Android SDK environment variables are set when targeting Android
+        if "android" in self.config.platforms:
+            self._ensure_android_env()
+
         # Run flutter doctor
         self._run_flutter_doctor()
 
@@ -320,6 +324,61 @@ class FlutterManager:
         flutter_bin = self.flutter_root / "bin"
         if str(flutter_bin) not in sys.path:
             sys.path.insert(0, str(flutter_bin))
+
+    def _detect_android_sdk_root(self) -> Path | None:
+        """Return the Android SDK root, checking env vars then common locations."""
+        import os
+
+        for var in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
+            val = os.getenv(var)
+            if val:
+                path = Path(val)
+                if path.exists():
+                    return path
+
+        common = [
+            Path("/opt/android-sdk"),
+            self.home / "Android" / "Sdk",
+            self.home / "Library" / "Android" / "sdk",
+        ]
+        for path in common:
+            if path.exists():
+                return path
+
+        return None
+
+    def _ensure_android_env(self) -> None:
+        """Write ANDROID_HOME and Android SDK PATH entries to shell profiles."""
+        console.print("  🤖 Configuring Android SDK environment...")
+
+        sdk_root = self._detect_android_sdk_root()
+        if sdk_root is None:
+            console.print(
+                "  ⚠️  Android SDK not found; skipping ANDROID_HOME configuration"
+            )
+            return
+
+        android_home_export = f'export ANDROID_HOME="{sdk_root}"'
+        android_path_export = (
+            'export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin'
+            ":$ANDROID_HOME/platform-tools"
+            ':$ANDROID_HOME/emulator"'
+        )
+        marker = "# Android SDK"
+
+        for profile in self.path_profiles:
+            if profile.exists():
+                content = profile.read_text()
+            else:
+                content = ""
+
+            if "ANDROID_HOME" in content:
+                console.print(f"  ✅ Android SDK env already in {profile.name}")
+                continue
+
+            with open(profile, "a") as f:
+                f.write(f"\n{marker}\n{android_home_export}\n{android_path_export}\n")
+            console.print(f"  ✅ Android SDK env added to {profile.name}")
 
     def _run_flutter_doctor(self) -> None:
         """Run flutter doctor to check setup."""

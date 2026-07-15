@@ -207,6 +207,69 @@ class TestFlutterManager:
         manager.config.platforms = ["ios"]
         manager._handle_android_licenses()  # Should return early
 
+    def test_detect_android_sdk_root_from_env(self, manager: FlutterManager) -> None:
+        """Test detecting Android SDK root from ANDROID_HOME env var."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(
+                "os.environ", {"ANDROID_HOME": tmpdir, "ANDROID_SDK_ROOT": ""}
+            ):
+                result = manager._detect_android_sdk_root()
+                assert result == Path(tmpdir)
+
+    def test_detect_android_sdk_root_common_location(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test detecting Android SDK root from a common fallback location."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir)
+            with patch.dict("os.environ", {"ANDROID_HOME": "", "ANDROID_SDK_ROOT": ""}):
+                with patch.object(
+                    manager, "_detect_android_sdk_root", return_value=sdk_path
+                ):
+                    result = manager._detect_android_sdk_root()
+                    assert result == sdk_path
+
+    def test_ensure_android_env_adds_to_profiles(self, manager: FlutterManager) -> None:
+        """Test that _ensure_android_env writes ANDROID_HOME to shell profiles."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir) / "android-sdk"
+            sdk_path.mkdir()
+            profile = Path(tmpdir) / ".bashrc"
+            profile.write_text("")
+            manager.path_profiles = [profile]
+            with patch.object(
+                manager, "_detect_android_sdk_root", return_value=sdk_path
+            ):
+                manager._ensure_android_env()
+            content = profile.read_text()
+            assert "ANDROID_HOME" in content
+            assert str(sdk_path) in content
+            assert "cmdline-tools/latest/bin" in content
+            assert "platform-tools" in content
+            assert "emulator" in content
+
+    def test_ensure_android_env_skips_if_already_set(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test that _ensure_android_env does not duplicate entries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir) / "android-sdk"
+            sdk_path.mkdir()
+            profile = Path(tmpdir) / ".bashrc"
+            profile.write_text('export ANDROID_HOME="/opt/android-sdk"\n')
+            manager.path_profiles = [profile]
+            with patch.object(
+                manager, "_detect_android_sdk_root", return_value=sdk_path
+            ):
+                manager._ensure_android_env()
+            content = profile.read_text()
+            assert content.count("ANDROID_HOME") == 1
+
+    def test_ensure_android_env_no_sdk(self, manager: FlutterManager) -> None:
+        """Test that _ensure_android_env is a no-op when SDK is not found."""
+        with patch.object(manager, "_detect_android_sdk_root", return_value=None):
+            manager._ensure_android_env()  # Should not raise
+
     def test_check_only_flutter_not_installed(self, manager: FlutterManager) -> None:
         """Test check_only when Flutter is not installed."""
         mock_root = MagicMock()
