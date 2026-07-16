@@ -1,3 +1,12 @@
+# Claude Code — ignore session/memory files but keep project settings
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+
 # Python-generated files
 __pycache__/
 *.py[oc]

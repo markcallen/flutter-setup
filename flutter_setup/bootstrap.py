@@ -37,6 +37,10 @@ class ProjectBootstrap:
         # Create Makefile
         self._create_makefile()
 
+        # Patch Android NDK version in build.gradle.kts
+        if "android" in self.config.platforms:
+            self._patch_android_ndk_version()
+
         # Create test structure
         self._create_test_structure()
 
@@ -54,6 +58,11 @@ class ProjectBootstrap:
 
         # Create environment support
         self._create_environment_support()
+
+        # Pin Flutter SDK version in pubspec.yaml
+        ver = self.config.flutter_version or self._detect_flutter_version()
+        if ver:
+            self._pin_flutter_sdk_version(ver)
 
         # Create README
         self._create_readme()
@@ -93,43 +102,146 @@ class ProjectBootstrap:
 
         console.print("  ✅ VS Code/Cursor configuration created")
 
+    def _detect_flutter_version(self) -> str | None:
+        """Return the version string of the Flutter SDK at config.flutter_location."""
+        import re
+
+        flutter_bin = self.config.flutter_location / "bin" / "flutter"
+        try:
+            result = subprocess.run(
+                [str(flutter_bin), "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout or result.stderr or ""
+            match = re.search(r"Flutter\s+([\d.]+)", output)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return None
+
     def _create_makefile(self) -> None:
         """Create Makefile with common commands."""
+        # Always lock the project to the Flutter version present at creation time.
+        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+        ver = self.config.flutter_version or self._detect_flutter_version()
+        flutter_home = str(self.config.flutter_location)
+
+        if ver:
+            version_header = (
+                f"FLUTTER_HOME := {flutter_home}\n"
+                f'FLUTTER := "$(FLUTTER_HOME)/bin/flutter"\n'
+                f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
+            )
+            version_dep = " check-flutter-version"
+            # Use flutter pub get to enforce the pubspec.yaml >=constraint natively
+            version_target = """
+check-flutter-version:
+\t@echo "Checking Flutter SDK satisfies >=$(FLUTTER_REQUIRED_VERSION) (pubspec.yaml)..."
+\t@$(FLUTTER) pub get
+
+.PHONY: check-flutter-version
+"""
+        else:
+            version_header = ""
+            version_dep = ""
+            version_target = ""
+
+        flutter_cmd = "$(FLUTTER)" if ver else "flutter"
+
         generate_target = ""
         if self.config.database == "sqlite":
-            generate_target = """
-generate:
-	dart run build_runner build --delete-conflicting-outputs
+            generate_target = f"""
+generate:{version_dep}
+\tdart run build_runner build --delete-conflicting-outputs
 """
 
-        makefile_content = f"""run:
-	flutter run -d chrome
+        web_target = ""
+        if "web" in self.config.platforms:
+            web_target = f"run-chrome:{version_dep}\n\t{flutter_cmd} run -d chrome\n\n"
 
-run_ios:
-	flutter run -d ios
+        android_sdk_header = ""
+        android_sdk_dep = ""
+        android_sdk_target = ""
+        if "android" in self.config.platforms:
+            android_sdk_header = (
+                "ANDROID_SDK_ROOT ?= $(or $(ANDROID_HOME),/opt/android-sdk)\n"
+                "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
+                "REQUIRED_NDK := 27.0.12077973\n\n"
+            )
+            android_sdk_dep = " check-android-sdk"
+            android_sdk_target = """
+check-android-sdk:
+\t@if [ ! -f "$(ANDROID_SDK_ROOT)/ndk/$(REQUIRED_NDK)/source.properties" ]; then \\
+\t\techo "NDK $(REQUIRED_NDK) missing or incomplete, installing..."; \\
+\t\t$(SDKMANAGER) "ndk;$(REQUIRED_NDK)"; \\
+\telse \\
+\t\techo "NDK $(REQUIRED_NDK) ok"; \\
+\tfi
 
-run_android:
-	flutter run -d android
+.PHONY: check-android-sdk
+"""
 
-analyze:
-	flutter analyze
+        makefile_content = f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
+\t{flutter_cmd} run -d ios
 
-test:
-	flutter test
+run-android:{version_dep}{android_sdk_dep}
+\t{flutter_cmd} run -d android
 
-integration:
-	flutter test integration_test
-{generate_target}"""
+analyze:{version_dep}
+\t{flutter_cmd} analyze
+
+test:{version_dep}
+\t{flutter_cmd} test
+
+integration:{version_dep}
+\t{flutter_cmd} test integration_test
+
+upgrade:{version_dep}
+\t{flutter_cmd} pub upgrade
+
+upgrade-check:{version_dep}
+\t{flutter_cmd} pub get
+{generate_target}{android_sdk_target}{version_target}"""
 
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
 
         console.print("  ✅ Makefile created")
 
+    def _patch_android_ndk_version(self) -> None:
+        """Pin the Android NDK version in build.gradle.kts.
+
+        flutter create sets ndkVersion = flutter.ndkVersion (currently 26.x), but
+        path_provider_android and sqlite3_flutter_libs require NDK 27.0.12077973.
+        NDK versions are backward-compatible, so pinning to the highest required
+        version fixes the mismatch warning and avoids a failed build.
+        """
+        gradle_path = self.config.project_path / "android" / "app" / "build.gradle.kts"
+        if not gradle_path.exists():
+            return
+
+        content = gradle_path.read_text()
+        patched = content.replace(
+            "ndkVersion = flutter.ndkVersion",
+            'ndkVersion = "27.0.12077973"',
+        )
+        if patched != content:
+            gradle_path.write_text(patched)
+            console.print("  ✅ Android NDK version pinned in build.gradle.kts")
+
     def _create_test_structure(self) -> None:
         """Create test directory structure."""
         test_dir = self.config.project_path / "test"
         test_dir.mkdir(exist_ok=True)
+
+        # Remove the stale counter test that `flutter create` generates; it
+        # references `MyApp` which doesn't exist in the scaffolded project.
+        default_test = test_dir / "widget_test.dart"
+        if default_test.exists():
+            default_test.unlink()
 
         # Unit test directory
         unit_dir = test_dir / "unit"
@@ -550,6 +662,28 @@ class FirebaseNotificationsService {
 
         return dependencies
 
+    def _pin_flutter_sdk_version(self, version: str) -> None:
+        """Set the flutter SDK constraint in pubspec.yaml to >= the given version."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            console.print("  ⚠️  pubspec.yaml not found, skipping Flutter version pin")
+            return
+
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+
+            if "environment" not in pubspec:
+                pubspec["environment"] = {}
+            pubspec["environment"]["flutter"] = f">={version}"
+
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+
+            console.print(f"  ✅ Pinned flutter SDK to >={version} in pubspec.yaml")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to pin Flutter version in pubspec.yaml: {e}")
+
     def _add_integration_test_sdk_dependency(self) -> None:
         """Add integration_test as an SDK dependency to pubspec.yaml."""
         pubspec_path = self.config.project_path / "pubspec.yaml"
@@ -596,10 +730,30 @@ API_URL=https://api.example.com
         with open(self.config.project_path / ".env", "w") as f:
             f.write(env_content)
 
+        # Declare .env as a Flutter asset so it gets bundled into the app
+        self._add_env_asset_to_pubspec()
+
         # Modify main.dart to load .env
         self._modify_main_dart()
 
         console.print("  ✅ Environment support created")
+
+    def _add_env_asset_to_pubspec(self) -> None:
+        """Add .env to the flutter assets list in pubspec.yaml."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            flutter_section = pubspec.setdefault("flutter", {})
+            assets = flutter_section.setdefault("assets", [])
+            if ".env" not in assets:
+                assets.append(".env")
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add .env to pubspec.yaml assets: {e}")
 
     def _modify_main_dart(self) -> None:
         """Modify main.dart to load environment variables."""
@@ -680,6 +834,15 @@ API_URL=https://api.example.com
 
     def _create_readme(self) -> None:
         """Create README file."""
+        if "web" in self.config.platforms:
+            run_cmd = "make run-chrome      # runs on Chrome"
+        elif "ios" in self.config.platforms:
+            run_cmd = "make run-ios         # runs on iOS simulator"
+        elif "android" in self.config.platforms:
+            run_cmd = "make run-android     # runs on Android emulator"
+        else:
+            run_cmd = "flutter run"
+
         readme_content = f"""# {self.config.project_name}
 
 Flutter app scaffolded for Cursor.
@@ -687,7 +850,7 @@ Flutter app scaffolded for Cursor.
 ## Quickstart
 ```bash
 flutter pub get
-make run            # runs on Chrome by default
+{run_cmd}
 ```
 
 ## Testing

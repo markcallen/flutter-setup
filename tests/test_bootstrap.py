@@ -56,16 +56,19 @@ class TestProjectBootstrap:
         """Test bootstrap_project calls all setup methods."""
         with patch.object(bootstrap, "_create_vscode_config"):
             with patch.object(bootstrap, "_create_makefile"):
-                with patch.object(bootstrap, "_create_test_structure"):
-                    with patch.object(bootstrap, "_create_analysis_options"):
-                        with patch.object(bootstrap, "_create_cicd"):
-                            with patch.object(bootstrap, "_add_dependencies"):
-                                with patch.object(
-                                    bootstrap, "_create_environment_support"
-                                ):
-                                    with patch.object(bootstrap, "_create_readme"):
-                                        with patch.object(bootstrap, "_format_code"):
-                                            bootstrap.bootstrap_project()
+                with patch.object(bootstrap, "_patch_android_ndk_version"):
+                    with patch.object(bootstrap, "_create_test_structure"):
+                        with patch.object(bootstrap, "_create_analysis_options"):
+                            with patch.object(bootstrap, "_create_cicd"):
+                                with patch.object(bootstrap, "_add_dependencies"):
+                                    with patch.object(
+                                        bootstrap, "_create_environment_support"
+                                    ):
+                                        with patch.object(bootstrap, "_create_readme"):
+                                            with patch.object(
+                                                bootstrap, "_format_code"
+                                            ):
+                                                bootstrap.bootstrap_project()
 
     def test_create_vscode_config(self, config: Config) -> None:
         """Test creating VS Code configuration."""
@@ -89,8 +92,31 @@ class TestProjectBootstrap:
             makefile = config.project_path / "Makefile"
             assert makefile.exists()
             content = makefile.read_text()
-            assert "run:" in content
+            assert "run-chrome:" not in content
             assert "analyze:" in content
+
+    def test_patch_android_ndk_version(self, config: Config) -> None:
+        """Test that build.gradle.kts is patched to pin the NDK version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            gradle_dir = config.project_path / "android" / "app"
+            gradle_dir.mkdir(parents=True, exist_ok=True)
+            gradle_file = gradle_dir / "build.gradle.kts"
+            gradle_file.write_text(
+                "android {\n    ndkVersion = flutter.ndkVersion\n}\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._patch_android_ndk_version()
+            content = gradle_file.read_text()
+            assert 'ndkVersion = "27.0.12077973"' in content
+            assert "flutter.ndkVersion" not in content
+
+    def test_patch_android_ndk_version_missing_file(self, config: Config) -> None:
+        """Test that patching is a no-op when build.gradle.kts does not exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._patch_android_ndk_version()  # should not raise
 
     def test_create_test_structure(self, config: Config) -> None:
         """Test creating test directory structure."""
@@ -102,6 +128,20 @@ class TestProjectBootstrap:
             assert (config.project_path / "test" / "unit").exists()
             assert (config.project_path / "test" / "widget").exists()
             assert (config.project_path / "integration_test").exists()
+
+    def test_create_test_structure_removes_default_widget_test(
+        self, config: Config
+    ) -> None:
+        """Test that the stale flutter-create widget_test.dart is removed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            stale = config.project_path / "test" / "widget_test.dart"
+            stale.parent.mkdir(parents=True, exist_ok=True)
+            stale.write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_test_structure()
+            assert not stale.exists()
 
     def test_create_sample_tests(self, config: Config) -> None:
         """Test creating sample test files."""
@@ -164,11 +204,14 @@ class TestProjectBootstrap:
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
             bootstrap = ProjectBootstrap(config)
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
-                env_file = config.project_path / ".env"
-                assert env_file.exists()
+                assert (config.project_path / ".env").exists()
+                pubspec = yaml.safe_load(pubspec_path.read_text())
+                assert ".env" in pubspec["flutter"]["assets"]
 
     def test_modify_main_dart_exists(self, config: Config) -> None:
         """Test modifying main.dart when it exists."""
@@ -392,13 +435,29 @@ class TestProjectBootstrap:
             bootstrap._create_makefile()
             makefile = config.project_path / "Makefile"
             content = makefile.read_text()
-            assert "run:" in content
-            assert "run_ios:" in content
-            assert "run_android:" in content
+            assert "run-chrome:" not in content
+            assert "run-ios:" in content
+            assert "run-android:" in content
+            assert "check-android-sdk" in content
+            assert "ANDROID_SDK_ROOT" in content
+            assert "REQUIRED_NDK" in content
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
             assert "generate:" not in content
+
+    def test_create_makefile_web_run_chrome(self, config: Config) -> None:
+        """Test Makefile includes run-chrome target only when web platform is selected."""
+        config.platforms = ["web"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            makefile = config.project_path / "Makefile"
+            content = makefile.read_text()
+            assert "run-chrome:" in content
+            assert "flutter run -d chrome" in content
 
     def test_create_makefile_sqlite_generate_target(self, config: Config) -> None:
         """Test Makefile includes build_runner target for SQLite projects."""
@@ -442,6 +501,9 @@ class TestProjectBootstrap:
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
+            (config.project_path / "pubspec.yaml").write_text(
+                "flutter:\n  uses-material-design: true\n"
+            )
             bootstrap = ProjectBootstrap(config)
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
@@ -449,6 +511,38 @@ class TestProjectBootstrap:
                 content = env_file.read_text()
                 assert "API_URL" in content
                 assert "https://api.example.com" in content
+
+    def test_add_env_asset_to_pubspec(self, config: Config) -> None:
+        """Test that .env is added to pubspec.yaml flutter assets."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert ".env" in pubspec["flutter"]["assets"]
+
+    def test_add_env_asset_to_pubspec_no_file(self, config: Config) -> None:
+        """Test _add_env_asset_to_pubspec is a no-op when pubspec.yaml is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()  # should not raise
+
+    def test_add_env_asset_to_pubspec_idempotent(self, config: Config) -> None:
+        """Test _add_env_asset_to_pubspec does not duplicate .env."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  assets:\n    - .env\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["flutter"]["assets"].count(".env") == 1
 
     def test_create_readme_content(self, config: Config) -> None:
         """Test README file content."""
@@ -461,7 +555,7 @@ class TestProjectBootstrap:
             content = readme.read_text()
             assert config.project_name in content
             assert "flutter pub get" in content
-            assert "make run" in content
+            assert "make run-ios" in content
             assert "make test" in content
             assert "make integration" in content
             assert "make analyze" in content
@@ -565,3 +659,175 @@ class TestProjectBootstrap:
         assert "drift_dev" in dev_dependencies
         assert "build_runner" in dev_dependencies
         assert "mocktail" in dev_dependencies
+
+    # --- _detect_flutter_version ---
+
+    def test_detect_flutter_version_from_stdout(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Version is read from stdout."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="Flutter 3.24.0 • channel stable", stderr=""
+            )
+            assert bootstrap._detect_flutter_version() == "3.24.0"
+
+    def test_detect_flutter_version_from_stderr(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Version falls back to stderr when stdout is empty."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="", stderr="Flutter 3.22.1 • channel stable"
+            )
+            assert bootstrap._detect_flutter_version() == "3.22.1"
+
+    def test_detect_flutter_version_not_found(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Returns None when the version cannot be parsed."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="", stderr="")
+            assert bootstrap._detect_flutter_version() is None
+
+    def test_detect_flutter_version_subprocess_error(
+        self, bootstrap: ProjectBootstrap
+    ) -> None:
+        """Returns None when subprocess raises."""
+        with patch("subprocess.run", side_effect=OSError("not found")):
+            assert bootstrap._detect_flutter_version() is None
+
+    # --- _pin_flutter_sdk_version ---
+
+    def test_pin_flutter_sdk_version_writes_constraint(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Writes environment.flutter >= constraint into pubspec.yaml."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        pubspec_path = project_dir / "pubspec.yaml"
+        pubspec_path.write_text("name: test_app\nenvironment:\n  sdk: '>=3.4.0'\n")
+
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")
+
+        with open(pubspec_path) as f:
+            pubspec = yaml.safe_load(f)
+        assert pubspec["environment"]["flutter"] == ">=3.24.0"
+        assert pubspec["environment"]["sdk"] == ">=3.4.0"  # preserved
+
+    def test_pin_flutter_sdk_version_creates_environment_section(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Creates environment section if absent."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        pubspec_path = project_dir / "pubspec.yaml"
+        pubspec_path.write_text("name: test_app\n")
+
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")
+
+        with open(pubspec_path) as f:
+            pubspec = yaml.safe_load(f)
+        assert pubspec["environment"]["flutter"] == ">=3.24.0"
+
+    def test_pin_flutter_sdk_version_missing_pubspec(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Does not raise when pubspec.yaml does not exist."""
+        config.output_dir = tmp_path
+        (tmp_path / config.project_name).mkdir()
+        bootstrap = ProjectBootstrap(config)
+        bootstrap._pin_flutter_sdk_version("3.24.0")  # should not raise
+
+    # --- Makefile version check target ---
+
+    def test_create_makefile_with_detected_version(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Makefile includes check-flutter-version when a version is detected."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "FLUTTER_REQUIRED_VERSION := 3.24.0" in makefile
+        assert f"FLUTTER_HOME := {config.flutter_location}" in makefile
+        assert 'FLUTTER := "$(FLUTTER_HOME)/bin/flutter"' in makefile
+        assert "check-flutter-version" in makefile
+        assert "$(FLUTTER_REQUIRED_VERSION)" in makefile
+        assert "$(FLUTTER) run" in makefile
+        assert "run-ios: check-flutter-version" in makefile
+        # Version check uses native resolver, not shell parsing
+        assert "pub get" in makefile
+
+    def test_create_makefile_upgrade_depends_on_version_check(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """upgrade and upgrade-check targets depend on check-flutter-version."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "upgrade: check-flutter-version" in makefile
+        assert "upgrade-check: check-flutter-version" in makefile
+
+    def test_create_makefile_generate_depends_on_version_check(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """generate target depends on check-flutter-version when database=sqlite."""
+        config.output_dir = tmp_path
+        config.database = "sqlite"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "generate: check-flutter-version" in makefile
+
+    def test_create_makefile_explicit_version_overrides_detected(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Explicit flutter_version takes precedence over detected version."""
+        config.output_dir = tmp_path
+        config.flutter_version = "3.22.0"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "FLUTTER_REQUIRED_VERSION := 3.22.0" in makefile
+
+    def test_create_makefile_no_version_check_when_undetectable(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """Makefile has no version check when Flutter version cannot be detected."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value=None):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "check-flutter-version" not in makefile
+        assert "FLUTTER_REQUIRED_VERSION" not in makefile

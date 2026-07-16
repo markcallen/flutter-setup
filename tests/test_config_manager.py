@@ -183,6 +183,7 @@ class TestConfigManager:
         with patch.dict(os.environ, {}, clear=True):
             with patch("shutil.which", return_value=None):
                 with patch("pathlib.Path.home", return_value=Path("/nonexistent")):
-                    manager = ConfigManager()
-                    location = manager.detect_flutter_location()
-                    assert location is None
+                    with patch("pathlib.Path.exists", return_value=False):
+                        manager = ConfigManager()
+                        location = manager.detect_flutter_location()
+                        assert location is None

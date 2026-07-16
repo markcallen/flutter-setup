@@ -163,11 +163,19 @@ class FlutterSetup:
                 "   [code]source ~/.bashrc[/code]      # bash\n"
                 "   [code]source ~/.zshrc[/code]       # zsh"
             )
-        ios_run_step = (
-            "   [code]make run_ios[/code]       # runs on iOS simulator\n"
-            if self.platform == "darwin"
-            else ""
+        platform_run_labels = {
+            "web": ("make run-chrome", "runs on Chrome"),
+            "ios": ("make run-ios", "runs on iOS simulator"),
+            "android": ("make run-android", "runs on Android emulator"),
+        }
+        run_steps = "\n".join(
+            f"   [code]{cmd}[/code]   # {label}"
+            for p in self.config.platforms
+            if (entry := platform_run_labels.get(p))
+            for cmd, label in [entry]
         )
+        if not run_steps:
+            run_steps = "   [code]flutter run[/code]"
 
         next_steps = f"""
 [bold]Next steps:[/bold]
@@ -179,8 +187,7 @@ class FlutterSetup:
    [code]cd "{self.config.project_path}"[/code]
 
 3. [blue]Run your Flutter app:[/blue]
-   [code]make run[/code]           # runs on Chrome by default
-{ios_run_step}   [code]make run_android[/code]   # runs on Android emulator
+{run_steps}
 
 4. [blue]Test your setup:[/blue]
    [code]make test[/code]          # run unit + widget tests

@@ -33,33 +33,9 @@ from .platform import detect_runtime_platform
 console = Console()
 
 
-def merge_cli_with_config(
-    ctx: click.Context,
-    param_name: str,
-    cli_value: Any,
-    file_config: Dict[str, Any],
-    config_key: str | None = None,
-) -> Any:
-    """
-    Merge CLI parameter with config file value.
-
-    If the parameter was explicitly provided via command line, use the CLI value.
-    Otherwise, use the config file value if available, or fall back to CLI value.
-
-    Args:
-        ctx: Click context to check parameter source
-        param_name: Name of the CLI parameter
-        cli_value: Value from CLI (may be default)
-        file_config: Dictionary from config file to look up values
-        config_key: Key name in config file (defaults to param_name)
-
-    Returns:
-        Merged value (CLI value if explicitly provided, else config file value or CLI default)
-    """
-    config_key = config_key or param_name
-    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
-        return cli_value
-    return file_config.get(config_key, cli_value)
+def _is_interactive() -> bool:
+    """Return True when stdin is a TTY (interactive session)."""
+    return sys.stdin.isatty()
 
 
 def print_banner() -> None:
@@ -95,12 +71,17 @@ def init_config(force: bool) -> None:
     # Load existing config if it exists
     existing_config = None
     if config_manager.config_file.exists():
-        if not force:
+        if force:
+            config_manager.config_file.unlink()
+            console.print(
+                f"[yellow]Deleted existing config: {config_manager.config_file}[/yellow]\n"
+            )
+        else:
             console.print(
                 f"[yellow]⚠️  Config file already exists at: {config_manager.config_file}[/yellow]"
             )
             console.print("[dim]Loading existing configuration for editing...[/dim]\n")
-        existing_config = config_manager.load_config()
+            existing_config = config_manager.load_config()
 
     # Start interactive configuration
     console.print("[bold blue]Flutter Setup Configuration[/bold blue]\n")
@@ -162,104 +143,36 @@ def init_config(force: bool) -> None:
         type=str,
     )
 
-    # 4. Architecture template
-    console.print("\n[bold]4. Architecture Template[/bold]")
-    if existing_config:
-        current_architecture = existing_config.get("project", {}).get(
-            "architecture", "basic"
-        )
-        console.print(f"[dim]Current: {current_architecture}[/dim]")
-    else:
-        current_architecture = "basic"
-
-    architecture = click.prompt(
-        "Architecture template",
-        default=current_architecture,
-        type=click.Choice(["basic", "clean"], case_sensitive=False),
-    )
-
-    # 5. Local database
-    console.print("\n[bold]5. Local Database[/bold]")
-    if existing_config:
-        current_database = existing_config.get("project", {}).get("database", "none")
-        console.print(f"[dim]Current: {current_database}[/dim]")
-    else:
-        current_database = "none"
-
-    database = click.prompt(
-        "Local database",
-        default=current_database,
-        type=click.Choice(["none", "sqlite"], case_sensitive=False),
-    )
-
-    # 6. Testing starter
-    console.print("\n[bold]6. Testing Starter[/bold]")
-    if existing_config:
-        current_testing = existing_config.get("project", {}).get("testing", "standard")
-        console.print(f"[dim]Current: {current_testing}[/dim]")
-    else:
-        current_testing = "standard"
-
-    testing = click.prompt(
-        "Testing starter",
-        default=current_testing,
-        type=click.Choice(["standard", "mocktail"], case_sensitive=False),
-    )
-
-    # 7. Firebase services
-    console.print("\n[bold]7. Firebase Services[/bold]")
-    project_config = existing_config.get("project", {}) if existing_config else {}
-
-    auth_provider = click.prompt(
-        "Auth provider",
-        default=project_config.get("auth_provider", "none"),
-        type=click.Choice(["none", "firebase"], case_sensitive=False),
-    )
-    cloud_database = click.prompt(
-        "Cloud database",
-        default=project_config.get("cloud_database", "none"),
-        type=click.Choice(["none", "firestore"], case_sensitive=False),
-    )
-    notifications_provider = click.prompt(
-        "Notifications provider",
-        default=project_config.get("notifications_provider", "none"),
-        type=click.Choice(["none", "firebase"], case_sensitive=False),
-    )
-
-    # Build the config
+    # Build the config, preserving any existing project settings not covered by init prompts
+    existing_project = existing_config.get("project", {}) if existing_config else {}
     config = {
         "flutter": {
             "location": str(flutter_location),
             "channel": channel.lower(),
             "update_mode": (
-                existing_config.get("flutter", {}).get("update_mode", "reset")
+                existing_config.get("flutter", {}).get("update_mode", "skip")
                 if existing_config
-                else "reset"
+                else "skip"
             ),
         },
         "project": {
             "org": org,
-            "template": (
-                existing_config.get("project", {}).get("template", "app")
-                if existing_config
-                else "app"
-            ),
-            "architecture": architecture.lower(),
-            "database": database.lower(),
-            "testing": testing.lower(),
-            "auth_provider": auth_provider.lower(),
-            "cloud_database": cloud_database.lower(),
-            "notifications_provider": notifications_provider.lower(),
-            "ios_language": (
-                existing_config.get("project", {}).get("ios_language", "swift")
-                if existing_config
-                else "swift"
-            ),
-            "android_language": (
-                existing_config.get("project", {}).get("android_language", "kotlin")
-                if existing_config
-                else "kotlin"
-            ),
+            "template": existing_project.get("template", "app"),
+            # setup-owned fields: only carry forward if already written by a prior setup run
+            **{
+                k: existing_project[k]
+                for k in [
+                    "architecture",
+                    "database",
+                    "testing",
+                    "auth_provider",
+                    "cloud_database",
+                    "notifications_provider",
+                    "ios_language",
+                    "android_language",
+                ]
+                if k in existing_project
+            },
         },
     }
 
@@ -274,12 +187,6 @@ def init_config(force: bool) -> None:
     console.print(f"  Flutter location: {config['flutter']['location']}")
     console.print(f"  Flutter channel: {config['flutter']['channel']}")
     console.print(f"  Organization: {config['project']['org']}")
-    console.print(f"  Architecture: {config['project']['architecture']}")
-    console.print(f"  Database: {config['project']['database']}")
-    console.print(f"  Testing: {config['project']['testing']}")
-    console.print(f"  Auth provider: {config['project']['auth_provider']}")
-    console.print(f"  Cloud database: {config['project']['cloud_database']}")
-    console.print(f"  Notifications: {config['project']['notifications_provider']}")
     console.print(
         "\n[dim]You can edit this file directly or run 'flutter-setup init' again to update it.[/dim]"
     )
@@ -373,8 +280,8 @@ def check_command(verbose: bool) -> None:
 
 
 @cli.command("setup")
-@click.argument("project_name", required=True)
-@click.argument("platforms", nargs=-1, required=True)
+@click.argument("project_name", required=False, default=None)
+@click.argument("platforms", nargs=-1)
 @click.option(
     "--org",
     default="com.example",
@@ -449,8 +356,13 @@ def check_command(verbose: bool) -> None:
 @click.option(
     "--flutter-update",
     type=click.Choice(["reset", "reclone", "skip"]),
-    default="reset",
-    help="Flutter update mode (default: reset)",
+    default="skip",
+    help="Flutter update mode (default: skip)",
+)
+@click.option(
+    "--flutter-version",
+    default=None,
+    help="Required Flutter SDK version (e.g. 3.24.0). Errors early if not installed.",
 )
 @click.option(
     "--dry-run",
@@ -466,7 +378,7 @@ def check_command(verbose: bool) -> None:
 @click.pass_context
 def setup_command(
     ctx: click.Context,
-    project_name: str,
+    project_name: str | None,
     platforms: tuple[str, ...],
     org: str,
     channel: FlutterChannel,
@@ -481,6 +393,7 @@ def setup_command(
     ios_language: IosLanguage,
     android_language: AndroidLanguage,
     flutter_update: UpdateMode,
+    flutter_version: str | None,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -488,90 +401,209 @@ def setup_command(
     try:
         print_banner()
 
-        # Validate platforms
-        if not platforms:
-            console.print("[red]Error: At least one platform is required[/red]")
-            sys.exit(1)
-
         # Load configuration from file
         config_manager = ConfigManager()
         config_manager.ensure_config_dir()
         file_config = config_manager.load_config()
+        file_project = file_config.get("project", {})
+        file_flutter = file_config.get("flutter", {})
 
         # Get Flutter location from config file
         flutter_location_str = file_config.get("flutter", {}).get("location")
         if flutter_location_str:
             flutter_location = Path(flutter_location_str)
         else:
-            # Fallback to default if not in config
             flutter_location = Path.home() / "development" / "flutter"
-            # Save default to config file
             config_manager.set_flutter_location(flutter_location)
 
-        # Merge file config with command-line arguments
-        # CLI args always take precedence when explicitly provided
-        file_project = file_config.get("project", {})
-        file_flutter = file_config.get("flutter", {})
+        def get_merged_or_prompt(
+            param_name: str,
+            cli_value: Any,
+            config_dict: Dict[str, Any],
+            prompt_text: str,
+            choices: list[str] | None = None,
+            config_key: str | None = None,
+        ) -> Any:
+            """Use CLI value if explicit, config file value if present and valid, else prompt."""
+            key = config_key or param_name
+            if (
+                ctx.get_parameter_source(param_name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
+                return cli_value
+            if key in config_dict:
+                value = config_dict[key]
+                # Normalize string values to lowercase for case-insensitive matching
+                normalized = value.lower() if isinstance(value, str) else value
+                if choices is None or normalized in choices:
+                    return normalized if isinstance(value, str) else value
+                # Config value is invalid — fall through to prompt
+            if not _is_interactive():
+                # Non-interactive environment: use CLI default silently
+                return cli_value
+            if choices:
+                return click.prompt(
+                    prompt_text,
+                    default=cli_value,
+                    type=click.Choice(choices, case_sensitive=False),
+                )
+            return click.prompt(prompt_text, default=cli_value)
 
-        # Check parameter sources to determine if CLI values were explicitly provided
-        # If provided via command line, always use CLI value (even if it matches default)
-        # Otherwise, use file config value if available, or fall back to CLI value (default)
-        # For each option: use CLI value if explicitly provided, otherwise use file config
-        merged_org = merge_cli_with_config(ctx, "org", org, file_project)
+        def get_merged(
+            param_name: str,
+            cli_value: Any,
+            config_dict: Dict[str, Any],
+            config_key: str | None = None,
+        ) -> Any:
+            """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
+            key = config_key or param_name
+            if (
+                ctx.get_parameter_source(param_name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
+                return cli_value
+            return config_dict.get(key, cli_value)
+
+        # Prompt for required arguments if not provided on the command line
+        if project_name is None:
+            project_name = click.prompt("Project name", type=str)
+
+        if not platforms:
+            console.print(
+                "[dim]Available platforms: ios, android, macos, linux, windows, web[/dim]"
+            )
+            platforms_str = click.prompt(
+                "Platforms (space-separated)",
+                default="ios android",
+            )
+            platforms = tuple(p.strip() for p in platforms_str.split() if p.strip())
+
+        if not platforms:
+            console.print("[red]Error: At least one platform is required[/red]")
+            sys.exit(1)
+
+        # Merge CLI options with config file, prompting for values not in either
+        merged_org = get_merged_or_prompt(
+            "org", org, file_project, "Organization ID (e.g., com.mycompany)"
+        )
         merged_channel = cast(
             FlutterChannel,
-            merge_cli_with_config(ctx, "channel", channel, file_flutter),
+            get_merged_or_prompt(
+                "channel",
+                channel,
+                file_flutter,
+                "Flutter channel",
+                choices=["stable", "beta"],
+            ),
         )
         merged_template = cast(
             TemplateType,
-            merge_cli_with_config(ctx, "template", template, file_project),
+            get_merged_or_prompt(
+                "template",
+                template,
+                file_project,
+                "Project template",
+                choices=["app", "plugin"],
+            ),
         )
         merged_architecture = cast(
             Architecture,
-            merge_cli_with_config(ctx, "architecture", architecture, file_project),
+            get_merged_or_prompt(
+                "architecture",
+                architecture,
+                file_project,
+                "Architecture",
+                choices=["basic", "clean"],
+            ),
         )
         merged_database = cast(
             Database,
-            merge_cli_with_config(ctx, "database", database, file_project),
+            get_merged_or_prompt(
+                "database",
+                database,
+                file_project,
+                "Local database",
+                choices=["none", "sqlite"],
+            ),
         )
         merged_testing = cast(
             Testing,
-            merge_cli_with_config(ctx, "testing", testing, file_project),
+            get_merged_or_prompt(
+                "testing",
+                testing,
+                file_project,
+                "Testing framework",
+                choices=["standard", "mocktail"],
+            ),
         )
         merged_auth_provider = cast(
             AuthProvider,
-            merge_cli_with_config(ctx, "auth_provider", auth_provider, file_project),
+            get_merged_or_prompt(
+                "auth_provider",
+                auth_provider,
+                file_project,
+                "Auth provider",
+                choices=["none", "firebase"],
+            ),
         )
         merged_cloud_database = cast(
             CloudDatabase,
-            merge_cli_with_config(ctx, "cloud_database", cloud_database, file_project),
+            get_merged_or_prompt(
+                "cloud_database",
+                cloud_database,
+                file_project,
+                "Cloud database",
+                choices=["none", "firestore"],
+            ),
         )
         merged_notifications_provider = cast(
             NotificationsProvider,
-            merge_cli_with_config(
-                ctx,
+            get_merged_or_prompt(
                 "notifications_provider",
                 notifications_provider,
                 file_project,
+                "Notifications provider",
+                choices=["none", "firebase"],
             ),
         )
-        merged_ios_language = cast(
-            IosLanguage,
-            merge_cli_with_config(ctx, "ios_language", ios_language, file_project),
-        )
-        merged_android_language = cast(
-            AndroidLanguage,
-            merge_cli_with_config(
-                ctx, "android_language", android_language, file_project
-            ),
-        )
+        # Language options only apply to plugin templates; never prompt for app projects
+        if merged_template == "plugin":
+            merged_ios_language = cast(
+                IosLanguage,
+                get_merged_or_prompt(
+                    "ios_language",
+                    ios_language,
+                    file_project,
+                    "iOS language",
+                    choices=["swift", "objc"],
+                ),
+            )
+            merged_android_language = cast(
+                AndroidLanguage,
+                get_merged_or_prompt(
+                    "android_language",
+                    android_language,
+                    file_project,
+                    "Android language",
+                    choices=["kotlin", "java"],
+                ),
+            )
+        else:
+            merged_ios_language = cast(
+                IosLanguage, get_merged("ios_language", ios_language, file_project)
+            )
+            merged_android_language = cast(
+                AndroidLanguage,
+                get_merged("android_language", android_language, file_project),
+            )
         merged_flutter_update = cast(
             UpdateMode,
-            merge_cli_with_config(
-                ctx,
+            get_merged_or_prompt(
                 "flutter_update",
                 flutter_update,
                 file_flutter,
+                "Flutter update mode",
+                choices=["reset", "reclone", "skip"],
                 config_key="update_mode",
             ),
         )
@@ -596,6 +628,7 @@ def setup_command(
             auth_provider=merged_auth_provider,
             cloud_database=merged_cloud_database,
             notifications_provider=merged_notifications_provider,
+            flutter_version=flutter_version,
         )
 
         # Create and run setup

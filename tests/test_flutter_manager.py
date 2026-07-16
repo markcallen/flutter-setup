@@ -56,8 +56,25 @@ class TestFlutterManager:
         """Test ensure_flutter in reclone mode."""
         manager.config.flutter_update_mode = "reclone"
         with patch.object(manager, "_reclone_flutter") as mock_reclone:
-            manager.ensure_flutter()
-            mock_reclone.assert_called_once()
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_reclone.assert_called_once()
+
+    def test_ensure_flutter_reclone_continues_to_path_and_doctor(
+        self, manager: FlutterManager
+    ) -> None:
+        """After reclone, PATH config and flutter doctor still run."""
+        manager.config.flutter_update_mode = "reclone"
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(manager, "_reclone_flutter"):
+            with patch.object(manager, "_check_flutter_version") as mock_check:
+                with patch.object(manager, "_ensure_flutter_path") as mock_path:
+                    with patch.object(manager, "_run_flutter_doctor") as mock_doctor:
+                        manager.ensure_flutter()
+                        mock_check.assert_called_once()
+                        mock_path.assert_called_once()
+                        mock_doctor.assert_called_once()
 
     def test_ensure_flutter_install(self, manager: FlutterManager) -> None:
         """Test ensure_flutter when Flutter is not installed."""
@@ -207,6 +224,69 @@ class TestFlutterManager:
         manager.config.platforms = ["ios"]
         manager._handle_android_licenses()  # Should return early
 
+    def test_detect_android_sdk_root_from_env(self, manager: FlutterManager) -> None:
+        """Test detecting Android SDK root from ANDROID_HOME env var."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(
+                "os.environ", {"ANDROID_HOME": tmpdir, "ANDROID_SDK_ROOT": ""}
+            ):
+                result = manager._detect_android_sdk_root()
+                assert result == Path(tmpdir)
+
+    def test_detect_android_sdk_root_common_location(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test detecting Android SDK root from a common fallback location."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir)
+            with patch.dict("os.environ", {"ANDROID_HOME": "", "ANDROID_SDK_ROOT": ""}):
+                with patch.object(
+                    manager, "_detect_android_sdk_root", return_value=sdk_path
+                ):
+                    result = manager._detect_android_sdk_root()
+                    assert result == sdk_path
+
+    def test_ensure_android_env_adds_to_profiles(self, manager: FlutterManager) -> None:
+        """Test that _ensure_android_env writes ANDROID_HOME to shell profiles."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir) / "android-sdk"
+            sdk_path.mkdir()
+            profile = Path(tmpdir) / ".bashrc"
+            profile.write_text("")
+            manager.path_profiles = [profile]
+            with patch.object(
+                manager, "_detect_android_sdk_root", return_value=sdk_path
+            ):
+                manager._ensure_android_env()
+            content = profile.read_text()
+            assert "ANDROID_HOME" in content
+            assert str(sdk_path) in content
+            assert "cmdline-tools/latest/bin" in content
+            assert "platform-tools" in content
+            assert "emulator" in content
+
+    def test_ensure_android_env_skips_if_already_set(
+        self, manager: FlutterManager
+    ) -> None:
+        """Test that _ensure_android_env does not duplicate entries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdk_path = Path(tmpdir) / "android-sdk"
+            sdk_path.mkdir()
+            profile = Path(tmpdir) / ".bashrc"
+            profile.write_text('export ANDROID_HOME="/opt/android-sdk"\n')
+            manager.path_profiles = [profile]
+            with patch.object(
+                manager, "_detect_android_sdk_root", return_value=sdk_path
+            ):
+                manager._ensure_android_env()
+            content = profile.read_text()
+            assert content.count("ANDROID_HOME") == 1
+
+    def test_ensure_android_env_no_sdk(self, manager: FlutterManager) -> None:
+        """Test that _ensure_android_env is a no-op when SDK is not found."""
+        with patch.object(manager, "_detect_android_sdk_root", return_value=None):
+            manager._ensure_android_env()  # Should not raise
+
     def test_check_only_flutter_not_installed(self, manager: FlutterManager) -> None:
         """Test check_only when Flutter is not installed."""
         mock_root = MagicMock()
@@ -300,3 +380,122 @@ class TestFlutterManager:
 
                 mock_run.side_effect = run_side_effect
                 assert manager.check_only() is False
+
+    # --- _get_current_flutter_version ---
+
+    def test_get_current_flutter_version_from_stdout(
+        self, manager: FlutterManager
+    ) -> None:
+        """Version is parsed from stdout."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="Flutter 3.24.0 • channel stable", stderr=""
+            )
+            assert manager._get_current_flutter_version() == "3.24.0"
+
+    def test_get_current_flutter_version_from_stderr(
+        self, manager: FlutterManager
+    ) -> None:
+        """Version falls back to stderr when stdout is empty."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout="", stderr="Flutter 3.22.1 • channel stable"
+            )
+            assert manager._get_current_flutter_version() == "3.22.1"
+
+    def test_get_current_flutter_version_not_found(
+        self, manager: FlutterManager
+    ) -> None:
+        """Returns None when neither stdout nor stderr contains a version."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="", stderr="")
+            assert manager._get_current_flutter_version() is None
+
+    def test_get_current_flutter_version_subprocess_error(
+        self, manager: FlutterManager
+    ) -> None:
+        """Returns None when subprocess raises."""
+        with patch("subprocess.run", side_effect=OSError("no flutter")):
+            assert manager._get_current_flutter_version() is None
+
+    # --- _check_flutter_version ---
+
+    def test_check_flutter_version_no_constraint(self, manager: FlutterManager) -> None:
+        """No flutter_version constraint → check is a no-op."""
+        manager.config.flutter_version = None
+        with patch.object(manager, "_get_current_flutter_version") as mock_get:
+            manager._check_flutter_version()
+            mock_get.assert_not_called()
+
+    def test_check_flutter_version_exact_match_passes(
+        self, manager: FlutterManager
+    ) -> None:
+        """Exact match satisfies >= constraint."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.24.0"
+        ):
+            manager._check_flutter_version()  # should not raise
+
+    def test_check_flutter_version_newer_passes(self, manager: FlutterManager) -> None:
+        """A newer installed version satisfies the >= constraint."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.25.1"
+        ):
+            manager._check_flutter_version()  # should not raise
+
+    def test_check_flutter_version_older_fails(self, manager: FlutterManager) -> None:
+        """An older installed version raises FlutterInstallationError."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(
+            manager, "_get_current_flutter_version", return_value="3.22.3"
+        ):
+            with pytest.raises(FlutterInstallationError, match="version too old"):
+                manager._check_flutter_version()
+
+    def test_check_flutter_version_undetectable_fails(
+        self, manager: FlutterManager
+    ) -> None:
+        """Undetectable version raises FlutterInstallationError."""
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(manager, "_get_current_flutter_version", return_value=None):
+            with pytest.raises(FlutterInstallationError, match="Could not determine"):
+                manager._check_flutter_version()
+
+    # --- ensure_flutter skip mode ---
+
+    def test_ensure_flutter_skip_mode_does_not_update(
+        self, manager: FlutterManager
+    ) -> None:
+        """In skip mode with SDK present, _update_flutter is never called."""
+        manager.config.flutter_update_mode = "skip"
+        mock_root = MagicMock()
+        mock_root.exists.return_value = True
+        mock_git = MagicMock()
+        mock_git.exists.return_value = True
+        mock_root.__truediv__.return_value = mock_git
+        manager.flutter_root = mock_root
+        with patch.object(manager, "_update_flutter") as mock_update:
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_update.assert_not_called()
+
+    def test_ensure_flutter_version_check_called_when_constraint_set(
+        self, manager: FlutterManager
+    ) -> None:
+        """_check_flutter_version is called when flutter_version is set."""
+        manager.config.flutter_update_mode = "skip"
+        manager.config.flutter_version = "3.24.0"
+        mock_root = MagicMock()
+        mock_root.exists.return_value = True
+        mock_git = MagicMock()
+        mock_git.exists.return_value = True
+        mock_root.__truediv__.return_value = mock_git
+        manager.flutter_root = mock_root
+        with patch.object(manager, "_check_flutter_version") as mock_check:
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_check.assert_called_once()

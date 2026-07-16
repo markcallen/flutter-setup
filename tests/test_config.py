@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+from typing import Any
 
 from flutter_setup.config import Config
 
@@ -364,3 +365,44 @@ class TestConfig:
         }
         with pytest.raises(ValueError, match=message):
             Config(**kwargs)  # type: ignore[arg-type]
+
+    def _base_kwargs(self) -> dict[str, Any]:
+        return {
+            "project_name": "TestApp",
+            "platforms": ["ios"],
+            "org": "com.test",
+            "channel": "stable",
+            "output_dir": Path("."),
+            "template": "app",
+            "ios_language": "swift",
+            "android_language": "kotlin",
+            "flutter_update_mode": "reset",
+            "dry_run": False,
+            "verbose": False,
+            "flutter_location": Path.home() / "development" / "flutter",
+        }
+
+    def test_flutter_version_none_accepted(self) -> None:
+        """flutter_version=None is the default and should be accepted."""
+        config = Config(**self._base_kwargs())
+        assert config.flutter_version is None
+
+    def test_flutter_version_valid(self) -> None:
+        """A correctly formatted X.Y.Z version is accepted."""
+        config = Config(**{**self._base_kwargs(), "flutter_version": "3.24.0"})
+        assert config.flutter_version == "3.24.0"
+
+    def test_flutter_version_invalid_two_parts(self) -> None:
+        """A version with only two parts should be rejected."""
+        with pytest.raises(ValueError, match="Invalid flutter_version"):
+            Config(**{**self._base_kwargs(), "flutter_version": "3.24"})
+
+    def test_flutter_version_invalid_channel_name(self) -> None:
+        """A channel name instead of a version number should be rejected."""
+        with pytest.raises(ValueError, match="Invalid flutter_version"):
+            Config(**{**self._base_kwargs(), "flutter_version": "stable"})
+
+    def test_flutter_version_invalid_with_prefix(self) -> None:
+        """A version string with a 'v' prefix should be rejected."""
+        with pytest.raises(ValueError, match="Invalid flutter_version"):
+            Config(**{**self._base_kwargs(), "flutter_version": "v3.24.0"})

@@ -1,9 +1,11 @@
-.PHONY: help install dev test lint type-check format check-all clean smoke-build-fast smoke-build-full smoke-test-fast smoke-test-full
+.PHONY: help setup check-deps install dev test lint type-check format check-all clean smoke-build-fast smoke-build-full smoke-test-fast smoke-test-full
 
 help:
 	@echo "Available commands:"
-	@echo "  install            - Install dependencies"
-	@echo "  dev                - Install in development mode"
+	@echo "  setup              - Set up the full dev environment (run this first)"
+	@echo "  check-deps         - Check that required tools are installed"
+	@echo "  install            - Install package (production)"
+	@echo "  dev                - Install package in development mode"
 	@echo "  test               - Run tests with coverage"
 	@echo "  lint               - Run ruff linter"
 	@echo "  type-check         - Run mypy type checker"
@@ -14,6 +16,20 @@ help:
 	@echo "  smoke-test-fast    - Run fast smoke test (warm SDK)"
 	@echo "  smoke-test-full    - Run full E2E smoke test (clean environment)"
 	@echo "  clean              - Remove build artifacts and caches"
+
+check-deps:
+	@command -v uv > /dev/null 2>&1 || (echo "ERROR: uv not found. Install from https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
+	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
+	@python3 -c "import sys; sys.exit(0) if sys.version_info >= (3, 12) else sys.exit('Python 3.12+ required, found ' + sys.version)" \
+		|| (echo "ERROR: Python 3.12+ required." && exit 1)
+	@echo "OK: uv, git, and Python 3.12+ all present"
+
+setup: check-deps
+	uv sync
+	uv pip install -e ".[dev]"
+	uv run pre-commit install
+	@echo ""
+	@echo "Dev environment ready. Try 'make test' to verify."
 
 install:
 	uv pip install .

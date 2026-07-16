@@ -55,19 +55,71 @@ class FlutterManager:
         # Handle reclone mode
         if self.config.flutter_update_mode == "reclone":
             self._reclone_flutter()
-            return
-
         # Check if Flutter is already installed
-        if not self.flutter_root.exists() or not (self.flutter_root / ".git").exists():
+        elif (
+            not self.flutter_root.exists() or not (self.flutter_root / ".git").exists()
+        ):
             self._install_flutter()
+        elif self.config.flutter_update_mode == "skip":
+            console.print("  ⏭️  Skipping Flutter SDK update (update mode: skip)")
         else:
             self._update_flutter()
+
+        # Verify version constraint before proceeding
+        if self.config.flutter_version:
+            self._check_flutter_version()
 
         # Ensure Flutter is in PATH
         self._ensure_flutter_path()
 
+        # Ensure Android SDK environment variables are set when targeting Android
+        if "android" in self.config.platforms:
+            self._ensure_android_env()
+
         # Run flutter doctor
         self._run_flutter_doctor()
+
+    def _get_current_flutter_version(self) -> str | None:
+        """Return the installed Flutter version string, or None if not detectable."""
+        flutter_bin = self.flutter_root / "bin" / "flutter"
+        try:
+            result = subprocess.run(
+                [str(flutter_bin), "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout or result.stderr or ""
+            match = re.search(r"Flutter\s+([\d.]+)", output)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return None
+
+    def _check_flutter_version(self) -> None:
+        """Raise FlutterInstallationError if the installed version is older than config.flutter_version."""
+        required = self.config.flutter_version
+        if not required:
+            return
+
+        current = self._get_current_flutter_version()
+        if current is None:
+            raise FlutterInstallationError(
+                f"Could not determine Flutter version. "
+                f"Ensure Flutter is installed at {self.flutter_root}."
+            )
+
+        def parse(v: str) -> tuple[int, ...]:
+            return tuple(int(x) for x in v.split("."))
+
+        if parse(current) < parse(required):
+            raise FlutterInstallationError(
+                f"Flutter version too old: found {current}, requires >={required}.\n"
+                f"  To upgrade: git -C {self.flutter_root} fetch && "
+                f"git -C {self.flutter_root} checkout {required}"
+            )
+        console.print(f"  ✅ Flutter {current} satisfies >={required}")
 
     def _reclone_flutter(self) -> None:
         """Reclone Flutter repository."""
@@ -272,6 +324,61 @@ class FlutterManager:
         flutter_bin = self.flutter_root / "bin"
         if str(flutter_bin) not in sys.path:
             sys.path.insert(0, str(flutter_bin))
+
+    def _detect_android_sdk_root(self) -> Path | None:
+        """Return the Android SDK root, checking env vars then common locations."""
+        import os
+
+        for var in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
+            val = os.getenv(var)
+            if val:
+                path = Path(val)
+                if path.exists():
+                    return path
+
+        common = [
+            Path("/opt/android-sdk"),
+            self.home / "Android" / "Sdk",
+            self.home / "Library" / "Android" / "sdk",
+        ]
+        for path in common:
+            if path.exists():
+                return path
+
+        return None
+
+    def _ensure_android_env(self) -> None:
+        """Write ANDROID_HOME and Android SDK PATH entries to shell profiles."""
+        console.print("  🤖 Configuring Android SDK environment...")
+
+        sdk_root = self._detect_android_sdk_root()
+        if sdk_root is None:
+            console.print(
+                "  ⚠️  Android SDK not found; skipping ANDROID_HOME configuration"
+            )
+            return
+
+        android_home_export = f'export ANDROID_HOME="{sdk_root}"'
+        android_path_export = (
+            'export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin'
+            ":$ANDROID_HOME/platform-tools"
+            ':$ANDROID_HOME/emulator"'
+        )
+        marker = "# Android SDK"
+
+        for profile in self.path_profiles:
+            if profile.exists():
+                content = profile.read_text()
+            else:
+                content = ""
+
+            if "ANDROID_HOME" in content:
+                console.print(f"  ✅ Android SDK env already in {profile.name}")
+                continue
+
+            with open(profile, "a") as f:
+                f.write(f"\n{marker}\n{android_home_export}\n{android_path_export}\n")
+            console.print(f"  ✅ Android SDK env added to {profile.name}")
 
     def _run_flutter_doctor(self) -> None:
         """Run flutter doctor to check setup."""
