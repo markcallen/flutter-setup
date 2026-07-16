@@ -5,6 +5,23 @@ These rules provide TypeScript linting setup instructions following Everyday Dev
 ---
 You are a TypeScript linting specialist. Your role is to implement comprehensive linting and code formatting for TypeScript/JavaScript projects following the Everyday DevOps best practices from https://www.markcallen.com/typescript-linting/
 
+## Gemini Mandates
+
+### Narrative Flow
+Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
+
+### Context Efficiency
+- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
+- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
+- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
+
+### Strategic Orchestration
+Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
+
+You are a TypeScript linting specialist. Your role is to implement comprehensive linting and code formatting for TypeScript/JavaScript projects with minimal configuration drift.
+
+Keep this rule compact. Prefer the repo’s existing tooling and only add the missing lint, format, and CI pieces.
+
 ## Your Responsibilities
 
 1. **Install Required Dependencies**
@@ -42,6 +59,29 @@ You are a TypeScript linting specialist. Your role is to implement comprehensive
    - Install dependencies with frozen lockfile
    - Run linting checks
 
+## Baseline Expectations
+
+- Use `eslint.config.js` or `eslint.config.mjs`, not legacy `.eslintrc`.
+- Support both JavaScript and TypeScript files when the repo contains both.
+- Ignore generated and build output such as `node_modules` and `dist`.
+- Add a small set of project-level rule overrides only when they are intentional.
+
+## Scripts
+
+- `lint`
+- `lint:fix`
+- `prettier`
+- `prettier:fix`
+
+Use the package manager already present in the repo.
+
+## CI Guidance
+
+- Add lint checks to the main CI path or a dedicated lint workflow.
+- Use frozen-lockfile installs.
+- If the repo uses pnpm, configure `pnpm/action-setup` with an explicit version.
+- Add workflow concurrency so redundant lint runs on the same ref are cancelled.
+
 ## Implementation Order
 
 Follow this order for a clean implementation:
@@ -55,6 +95,22 @@ Follow this order for a clean implementation:
 7. Coordinate with the `git-hooks` rules if the repo should enforce local hooks
 8. Create GitHub Actions workflow
 9. Test the setup
+
+## Guardrails
+
+- Do not replace an established lint stack without a clear reason.
+- Do not add repo-wide ignores that hide real source files.
+- Do not put hook-specific logic here; defer that to `git-hooks`.
+
+## When Completed
+
+After implementing the linting setup:
+
+1. Show the user what was created/modified
+2. Suggest running `yarn lint:fix` or `npm run lint:fix` to fix any existing issues
+3. Suggest running `yarn prettier:fix` or `npm run prettier:fix` to format all files
+4. Explain how to verify local linting commands before the first PR
+5. Provide guidance on creating a PR to test the GitHub Actions workflow
 
 ## Key Configuration Details
 
@@ -124,13 +180,3 @@ Omit the pnpm step only when the project uses npm or yarn.
 - Ensure the GitHub workflow uses --frozen-lockfile for consistent dependencies
 - When the project uses pnpm, the lint workflow must specify a pnpm version in `pnpm/action-setup` (e.g. `version: 9` or parse from package.json `packageManager`); otherwise the action errors with "No pnpm version is specified"
 - Check the project's package.json "type" field to determine CommonJS vs ES modules
-
-## When Completed
-
-After implementing the linting setup:
-
-1. Show the user what was created/modified
-2. Suggest running `yarn lint:fix` or `npm run lint:fix` to fix any existing issues
-3. Suggest running `yarn prettier:fix` or `npm run prettier:fix` to format all files
-4. Explain how to verify local linting commands before the first PR
-5. Provide guidance on creating a PR to test the GitHub Actions workflow

@@ -6,35 +6,20 @@ These rules help design and maintain release workflows for libraries, SDKs, and 
 ---
 # Web App Publishing Agent
 
-You are a publishing specialist for web applications deployed as Docker containers to Kubernetes.
-
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# Web App Publishing Agent
-
 You are a publishing specialist for web applications deployed as Docker containers or platform-native app artifacts.
 
 ## Goals
 
 - Build and publish a Docker image to GHCR or Docker Hub on every merge to `main`.
 - Tag images with the git SHA and `latest`; capture the digest for immutable deploys.
-- Update a separate Helm chart repository with the new image digest after the image is pushed.
+- Update deployment state according to the configured deployment model after the image is pushed.
 - Keep the CD workflow fast: cancel in-progress runs when a newer commit lands.
 
 ## Release Model
 
 Web apps use **continuous deployment** — every merge to `main` deploys. There is no manual version bump or `workflow_dispatch` trigger. If a named semver release is also needed (e.g. for a public API), create a separate `release.yml` workflow that responds to `v*` tags.
+
+No app deployment model is configured. Keep library, SDK, and CLI publishing guidance active, but do not assume Kubernetes, serverless, hosted-platform, or self-managed server deployment ownership until the repository sets `deploymentModel`.
 
 ## Workflow Trigger and Concurrency
 
@@ -111,33 +96,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  update_helm_chart:
+  update_deployment_state:
     needs: build_and_push
     runs-on: ubuntu-latest
+    # Include this job only when the configured deployment model has external
+    # state to update. Hosted, serverless, server, or none models may replace
+    # or omit this job entirely.
     steps:
-      - name: Checkout Helm chart repo
+      - name: Checkout deployment state repo
         uses: actions/checkout@v4
         with:
-          repository: OWNER/helm-charts   # your Helm chart repo
-          token: ${{ secrets.HELM_CHART_REPO_TOKEN }}
-          path: helm-charts
+          repository: OWNER/deployment-state
+          token: ${{ secrets.DEPLOYMENT_STATE_REPO_TOKEN }}
+          path: deployment-state
 
       - name: Install yq
         uses: mikefarah/yq@v4
 
-      - name: Update image digest in values.yaml
+      - name: Update image digest in deployment state
         run: |
-          cd helm-charts
+          cd deployment-state
           # Prefer digest pinning for immutable deploys
           IMAGE_DIGEST="${{ needs.build_and_push.outputs.image_digest }}"
           IMAGE_TAG="sha-$(echo '${{ github.sha }}' | head -c 7)"
-          # Update the chart values — adjust yq path to match your chart structure
-          yq -i '.image.digest = strenv(IMAGE_DIGEST)' charts/<your-chart>/values.yaml
-          yq -i '.image.tag = strenv(IMAGE_TAG)' charts/<your-chart>/values.yaml
+          # Kubernetes model: update the environment values referenced by ArgoCD.
+          # Hosted/serverless/server models: replace or remove this block.
+          yq -i '.image.digest = strenv(IMAGE_DIGEST)' path/to/deployment-state.yaml
+          yq -i '.image.tag = strenv(IMAGE_TAG)' path/to/deployment-state.yaml
 
-      - name: Commit and push chart update
+      - name: Commit and push deployment state update
         run: |
-          cd helm-charts
+          cd deployment-state
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
@@ -177,7 +166,7 @@ Choose one registry per deployment. Use GHCR for private or org-internal images;
 | `GITHUB_TOKEN` | GHCR push (automatic) |
 | `DOCKERHUB_USERNAME` | Docker Hub push |
 | `DOCKERHUB_TOKEN` | Docker Hub push |
-| `HELM_CHART_REPO_TOKEN` | Helm chart repo write access |
+| `DEPLOYMENT_STATE_REPO_TOKEN` | External deployment state or GitOps repo write access |
 
 ## README Badge
 
@@ -191,20 +180,13 @@ Add a badge for the deploy workflow:
 
 - Do not push mutable `latest` tags as the only tag; always include the SHA tag so deploys are traceable.
 - Use `docker/setup-buildx-action` and `cache-from: type=gha` to speed up repeated builds.
-- The Helm chart update job should be a no-op (early exit) when there are no changes, to avoid empty commits.
-- Keep the application repo and Helm chart repo separate; do not mix chart release state into app commits.
+- The deployment state update job should be omitted when the deployment model does not use an external state repository.
+- When present, the deployment state update job should be a no-op (early exit) when there are no changes, to avoid empty commits.
+- For Kubernetes, keep the Helm chart in `charts/<app>/` in the application repo and keep ArgoCD environment configuration in the separate GitOps repo.
 - If multiple environments exist (staging, production), make the target environment explicit in workflow inputs or use separate workflows.
 
 ## When to Apply
 
-- When a web application is deployed to Kubernetes via a Helm chart.
+- When a web application is deployed from a container image or platform-native app artifact.
 - When every merge to `main` should trigger a new deployment.
-- When the team wants immutable image references in their Helm chart.
-
-## Helm Chart Update Rules
-
-- Prefer digest pinning (`image.digest`) over tag pinning for production deploys.
-- Keep the `image.tag` field for human readability alongside the digest.
-- Do not overwrite unrelated chart values in the automation step.
-- If the chart repo is private, use a fine-grained PAT (`HELM_CHART_REPO_TOKEN`) scoped to Contents: Read and write on that repo only.
-- Bump the chart `version` field when chart templates change, not on every image update.
+- When the team wants immutable image references or artifact identifiers in deployment state.

@@ -7,23 +7,6 @@ Add standard badges (CI, Release, License, GitHub Release; plus npm for publishe
 
 When setting up or improving project documentation, add standard badges near the top of `README.md` to provide quick visibility into CI status, releases, license, and (for npm packages) npm registry info.
 
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# README Badges
-
-When setting up or improving project documentation, add standard badges near the top of `README.md` to provide quick visibility into CI status, releases, license, and (for npm packages) npm registry info.
-
 ## Your Responsibilities
 
 1. **Add badges at the top of README.md**

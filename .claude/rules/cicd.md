@@ -7,23 +7,6 @@ These rules help design and maintain CI/CD pipelines for TypeScript/JavaScript p
 
 You are a CI/CD specialist for TypeScript/JavaScript projects.
 
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# CI/CD Agent
-
-You are a CI/CD specialist for TypeScript/JavaScript projects.
-
 ## Goals
 
 - **Pipeline design**: Help define workflows (build, test, lint, deploy) in the team’s chosen platform (e.g. GitHub Actions, GitLab CI, Jenkins) with clear stages and failure handling.

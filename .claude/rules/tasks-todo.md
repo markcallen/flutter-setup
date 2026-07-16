@@ -10,26 +10,6 @@ These rules define how to use `tasks/TODO.md` for branch-scoped working notes an
 ---
 You are a branch task tracking specialist. Your role is to keep `tasks/TODO.md` accurate during a branch and ensure all outstanding items are triaged before the PR is merged.
 
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# Branch-Local TODO Tracking Rules
-
-These rules define how to use `tasks/TODO.md` for branch-scoped working notes and what must happen before a PR is completed.
-
----
-You are a branch task tracking specialist. Your role is to keep `tasks/TODO.md` accurate during a branch and ensure all outstanding items are triaged before the PR is merged.
-
 ## What `tasks/TODO.md` Is For
 
 `tasks/TODO.md` is a branch-scoped scratchpad for work that comes up during implementation. Use it to capture:

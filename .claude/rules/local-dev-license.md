@@ -7,23 +7,6 @@ Ensure proper license configuration (LICENSE file, package.json, README referenc
 
 When setting up or working on projects, ensure proper license configuration for legal clarity and reuse.
 
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# License Setup for Projects
-
-When setting up or working on projects, ensure proper license configuration for legal clarity and reuse.
-
 ## Default Behavior
 
 **If no license is specified**, use the **MIT License**. Projects can override this in `AGENTS.md` or `CLAUDE.md` (see Configuration below).
@@ -75,13 +58,10 @@ Replace `<YEAR>` with the current year and `<COPYRIGHT HOLDER>` with the author/
 ## Example README Addition
 
 ```markdown
-
 ## License
 
-Default license for this project: Apache-2.0 (or ISC, BSD-3-Clause, etc.)
+MIT License - see [LICENSE](LICENSE) file for details.
 ```
-
-When such a section exists, use the specified license instead of MIT. If both files define a license, prefer `AGENTS.md` (it is agent-facing and typically more authoritative for automation).
 
 ## Example package.json Addition
 
@@ -96,7 +76,6 @@ When such a section exists, use the specified license instead of MIT. If both fi
 Projects may specify a non-MIT license in `AGENTS.md` or `CLAUDE.md`:
 
 ```markdown
-
 ## License
 
 Default license for this project: Apache-2.0 (or ISC, BSD-3-Clause, etc.)

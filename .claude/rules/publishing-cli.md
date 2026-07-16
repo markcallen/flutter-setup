@@ -8,23 +8,6 @@ These rules help design and maintain release workflows for libraries, SDKs, and 
 
 You are a publishing specialist for CLI applications and command-line tools.
 
-## Gemini Mandates
-
-### Narrative Flow
-Always use the `update_topic` tool at the beginning of a task and when transitioning between major strategic phases. Provide a concise `title` and a detailed `summary` (5-10 sentences) that recaps completed work and outlines the immediate strategic intent.
-
-### Context Efficiency
-- **Surgical Reads:** Use `start_line` and `end_line` in `read_file` to minimize context usage.
-- **Parallelism:** Execute independent searches and reads in parallel whenever possible.
-- **Topic Search:** Use `grep_search` to identify points of interest before reading entire files.
-
-### Strategic Orchestration
-Delegate complex, repetitive, or high-volume tasks to specialized sub-agents (`codebase_investigator`, `generalist`) to keep the main session history lean and efficient.
-
-# CLI Publishing Agent
-
-You are a publishing specialist for CLI applications and command-line tools.
-
 ## Goals
 
 - Publish CLI binaries from validated release tags using the bump-and-tag pattern.
@@ -74,7 +57,7 @@ version: 2
 project_name: <your-cli-name>
 
 release:
-  name_template: "<your-cli-name> v{{ .Version }}"
+  name_template: '<your-cli-name> v{{ .Version }}'
 
 builds:
   - id: <your-cli-name>
@@ -97,7 +80,7 @@ builds:
 
 archives:
   - id: <your-cli-name>
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -192,7 +175,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: 'v2.14.0'       # pin to an explicit version; check for the latest at github.com/goreleaser/goreleaser/releases
+          version: 'v2.14.0' # pin to an explicit version; check for the latest at github.com/goreleaser/goreleaser/releases
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -205,6 +188,7 @@ jobs:
 - Run `go test ./...` before publish.
 - Use `CGO_ENABLED=0` for portable binaries.
 - Set distinct `checksum.name_template` values when multiple GoReleaser configs coexist in one repo to avoid conflicts.
+- Add a packaged-command smoke check that runs the built artifact before release.
 
 ## TypeScript/Node CLIs: npmjs
 
@@ -240,6 +224,8 @@ For Python CLI apps distributed through PyPI:
 ## App-Specific Requirements
 
 - Smoke-test the installed CLI from the built artifact before publishing.
+- The packaged-command smoke test must install or execute the built artifact, check `<cli> --help`, check `<cli> --version`, and run one representative command.
+- Keep local packaged-command smoke checks fast, run them in pre-push when the packaged artifact can be built deterministically, and require them in CI before publish jobs.
 - Keep installation instructions in `README.md` aligned with the actual release channel.
 - Publish checksums for downloadable binaries.
 - Ensure version output from the CLI (`<cli> --version`) matches the release tag.
