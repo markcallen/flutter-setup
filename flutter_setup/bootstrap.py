@@ -37,6 +37,10 @@ class ProjectBootstrap:
         # Create Makefile
         self._create_makefile()
 
+        # Patch Android NDK version in build.gradle.kts
+        if "android" in self.config.platforms:
+            self._patch_android_ndk_version()
+
         # Create test structure
         self._create_test_structure()
 
@@ -190,10 +194,37 @@ upgrade-check:
 
         console.print("  ✅ Makefile created")
 
+    def _patch_android_ndk_version(self) -> None:
+        """Pin the Android NDK version in build.gradle.kts.
+
+        flutter create sets ndkVersion = flutter.ndkVersion (currently 26.x), but
+        path_provider_android and sqlite3_flutter_libs require NDK 27.0.12077973.
+        NDK versions are backward-compatible, so pinning to the highest required
+        version fixes the mismatch warning and avoids a failed build.
+        """
+        gradle_path = self.config.project_path / "android" / "app" / "build.gradle.kts"
+        if not gradle_path.exists():
+            return
+
+        content = gradle_path.read_text()
+        patched = content.replace(
+            "ndkVersion = flutter.ndkVersion",
+            'ndkVersion = "27.0.12077973"',
+        )
+        if patched != content:
+            gradle_path.write_text(patched)
+            console.print("  ✅ Android NDK version pinned in build.gradle.kts")
+
     def _create_test_structure(self) -> None:
         """Create test directory structure."""
         test_dir = self.config.project_path / "test"
         test_dir.mkdir(exist_ok=True)
+
+        # Remove the stale counter test that `flutter create` generates; it
+        # references `MyApp` which doesn't exist in the scaffolded project.
+        default_test = test_dir / "widget_test.dart"
+        if default_test.exists():
+            default_test.unlink()
 
         # Unit test directory
         unit_dir = test_dir / "unit"

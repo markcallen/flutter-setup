@@ -56,16 +56,19 @@ class TestProjectBootstrap:
         """Test bootstrap_project calls all setup methods."""
         with patch.object(bootstrap, "_create_vscode_config"):
             with patch.object(bootstrap, "_create_makefile"):
-                with patch.object(bootstrap, "_create_test_structure"):
-                    with patch.object(bootstrap, "_create_analysis_options"):
-                        with patch.object(bootstrap, "_create_cicd"):
-                            with patch.object(bootstrap, "_add_dependencies"):
-                                with patch.object(
-                                    bootstrap, "_create_environment_support"
-                                ):
-                                    with patch.object(bootstrap, "_create_readme"):
-                                        with patch.object(bootstrap, "_format_code"):
-                                            bootstrap.bootstrap_project()
+                with patch.object(bootstrap, "_patch_android_ndk_version"):
+                    with patch.object(bootstrap, "_create_test_structure"):
+                        with patch.object(bootstrap, "_create_analysis_options"):
+                            with patch.object(bootstrap, "_create_cicd"):
+                                with patch.object(bootstrap, "_add_dependencies"):
+                                    with patch.object(
+                                        bootstrap, "_create_environment_support"
+                                    ):
+                                        with patch.object(bootstrap, "_create_readme"):
+                                            with patch.object(
+                                                bootstrap, "_format_code"
+                                            ):
+                                                bootstrap.bootstrap_project()
 
     def test_create_vscode_config(self, config: Config) -> None:
         """Test creating VS Code configuration."""
@@ -92,6 +95,29 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "analyze:" in content
 
+    def test_patch_android_ndk_version(self, config: Config) -> None:
+        """Test that build.gradle.kts is patched to pin the NDK version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            gradle_dir = config.project_path / "android" / "app"
+            gradle_dir.mkdir(parents=True, exist_ok=True)
+            gradle_file = gradle_dir / "build.gradle.kts"
+            gradle_file.write_text(
+                "android {\n    ndkVersion = flutter.ndkVersion\n}\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._patch_android_ndk_version()
+            content = gradle_file.read_text()
+            assert 'ndkVersion = "27.0.12077973"' in content
+            assert "flutter.ndkVersion" not in content
+
+    def test_patch_android_ndk_version_missing_file(self, config: Config) -> None:
+        """Test that patching is a no-op when build.gradle.kts does not exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._patch_android_ndk_version()  # should not raise
+
     def test_create_test_structure(self, config: Config) -> None:
         """Test creating test directory structure."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -102,6 +128,20 @@ class TestProjectBootstrap:
             assert (config.project_path / "test" / "unit").exists()
             assert (config.project_path / "test" / "widget").exists()
             assert (config.project_path / "integration_test").exists()
+
+    def test_create_test_structure_removes_default_widget_test(
+        self, config: Config
+    ) -> None:
+        """Test that the stale flutter-create widget_test.dart is removed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            stale = config.project_path / "test" / "widget_test.dart"
+            stale.parent.mkdir(parents=True, exist_ok=True)
+            stale.write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_test_structure()
+            assert not stale.exists()
 
     def test_create_sample_tests(self, config: Config) -> None:
         """Test creating sample test files."""
