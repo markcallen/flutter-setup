@@ -56,7 +56,9 @@ class FlutterManager:
         if self.config.flutter_update_mode == "reclone":
             self._reclone_flutter()
         # Check if Flutter is already installed
-        elif not self.flutter_root.exists() or not (self.flutter_root / ".git").exists():
+        elif (
+            not self.flutter_root.exists() or not (self.flutter_root / ".git").exists()
+        ):
             self._install_flutter()
         elif self.config.flutter_update_mode == "skip":
             console.print("  ⏭️  Skipping Flutter SDK update (update mode: skip)")
