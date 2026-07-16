@@ -33,6 +33,11 @@ from .platform import detect_runtime_platform
 console = Console()
 
 
+def _is_interactive() -> bool:
+    """Return True when stdin is a TTY (interactive session)."""
+    return sys.stdin.isatty()
+
+
 def print_banner() -> None:
     """Print the application banner."""
     banner = """
@@ -428,9 +433,14 @@ def setup_command(
                 return cli_value
             if key in config_dict:
                 value = config_dict[key]
-                if choices is None or value in choices:
-                    return value
+                # Normalize string values to lowercase for case-insensitive matching
+                normalized = value.lower() if isinstance(value, str) else value
+                if choices is None or normalized in choices:
+                    return normalized if isinstance(value, str) else value
                 # Config value is invalid — fall through to prompt
+            if not _is_interactive():
+                # Non-interactive environment: use CLI default silently
+                return cli_value
             if choices:
                 return click.prompt(
                     prompt_text,

@@ -56,8 +56,25 @@ class TestFlutterManager:
         """Test ensure_flutter in reclone mode."""
         manager.config.flutter_update_mode = "reclone"
         with patch.object(manager, "_reclone_flutter") as mock_reclone:
-            manager.ensure_flutter()
-            mock_reclone.assert_called_once()
+            with patch.object(manager, "_ensure_flutter_path"):
+                with patch.object(manager, "_run_flutter_doctor"):
+                    manager.ensure_flutter()
+                    mock_reclone.assert_called_once()
+
+    def test_ensure_flutter_reclone_continues_to_path_and_doctor(
+        self, manager: FlutterManager
+    ) -> None:
+        """After reclone, PATH config and flutter doctor still run."""
+        manager.config.flutter_update_mode = "reclone"
+        manager.config.flutter_version = "3.24.0"
+        with patch.object(manager, "_reclone_flutter"):
+            with patch.object(manager, "_check_flutter_version") as mock_check:
+                with patch.object(manager, "_ensure_flutter_path") as mock_path:
+                    with patch.object(manager, "_run_flutter_doctor") as mock_doctor:
+                        manager.ensure_flutter()
+                        mock_check.assert_called_once()
+                        mock_path.assert_called_once()
+                        mock_doctor.assert_called_once()
 
     def test_ensure_flutter_install(self, manager: FlutterManager) -> None:
         """Test ensure_flutter when Flutter is not installed."""

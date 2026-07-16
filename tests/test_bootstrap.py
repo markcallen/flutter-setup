@@ -760,11 +760,45 @@ class TestProjectBootstrap:
         makefile = (project_dir / "Makefile").read_text()
         assert "FLUTTER_REQUIRED_VERSION := 3.24.0" in makefile
         assert f"FLUTTER_HOME := {config.flutter_location}" in makefile
-        assert "FLUTTER := $(FLUTTER_HOME)/bin/flutter" in makefile
+        assert 'FLUTTER := "$(FLUTTER_HOME)/bin/flutter"' in makefile
         assert "check-flutter-version" in makefile
         assert "$(FLUTTER_REQUIRED_VERSION)" in makefile
         assert "$(FLUTTER) run" in makefile
         assert "run-ios: check-flutter-version" in makefile
+        # Version check uses native resolver, not shell parsing
+        assert "pub get" in makefile
+
+    def test_create_makefile_upgrade_depends_on_version_check(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """upgrade and upgrade-check targets depend on check-flutter-version."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "upgrade: check-flutter-version" in makefile
+        assert "upgrade-check: check-flutter-version" in makefile
+
+    def test_create_makefile_generate_depends_on_version_check(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """generate target depends on check-flutter-version when database=sqlite."""
+        config.output_dir = tmp_path
+        config.database = "sqlite"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "generate: check-flutter-version" in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(
         self, config: Config, tmp_path: Path

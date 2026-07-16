@@ -174,6 +174,8 @@ class FlutterSetup:
             if (entry := platform_run_labels.get(p))
             for cmd, label in [entry]
         )
+        if not run_steps:
+            run_steps = "   [code]flutter run[/code]"
 
         next_steps = f"""
 [bold]Next steps:[/bold]

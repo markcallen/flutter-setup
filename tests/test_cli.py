@@ -178,7 +178,9 @@ class TestCLI:
                     )
                     + "\n"
                 )
-                result = runner.invoke(cli, ["setup"], input=user_input)
+                # Simulate a TTY so get_merged_or_prompt falls through to click.prompt
+                with patch("flutter_setup.cli._is_interactive", return_value=True):
+                    result = runner.invoke(cli, ["setup"], input=user_input)
                 assert result.exit_code == 0
                 config = mock_setup_class.call_args.args[0]
                 assert config.project_name == "MyApp"
@@ -222,9 +224,10 @@ class TestCLI:
                     )
                     + "\n"
                 )
-                result = runner.invoke(
-                    cli, ["setup", "MyPlugin", "ios", "android"], input=user_input
-                )
+                with patch("flutter_setup.cli._is_interactive", return_value=True):
+                    result = runner.invoke(
+                        cli, ["setup", "MyPlugin", "ios", "android"], input=user_input
+                    )
                 assert result.exit_code == 0
                 config = mock_setup_class.call_args.args[0]
                 assert config.template == "plugin"
@@ -259,7 +262,10 @@ class TestCLI:
             with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
                 mock_setup = Mock()
                 mock_setup_class.return_value = mock_setup
-                result = runner.invoke(cli, ["setup", "TestApp", "ios"], input="app\n")
+                with patch("flutter_setup.cli._is_interactive", return_value=True):
+                    result = runner.invoke(
+                        cli, ["setup", "TestApp", "ios"], input="app\n"
+                    )
                 assert result.exit_code == 0
                 config = mock_setup_class.call_args.args[0]
                 assert config.template == "app"

@@ -124,13 +124,6 @@ class ProjectBootstrap:
 
     def _create_makefile(self) -> None:
         """Create Makefile with common commands."""
-        generate_target = ""
-        if self.config.database == "sqlite":
-            generate_target = """
-generate:
-	dart run build_runner build --delete-conflicting-outputs
-"""
-
         # Always lock the project to the Flutter version present at creation time.
         # --flutter-version provides an explicit pin; otherwise detect from the SDK.
         ver = self.config.flutter_version or self._detect_flutter_version()
@@ -139,20 +132,15 @@ generate:
         if ver:
             version_header = (
                 f"FLUTTER_HOME := {flutter_home}\n"
-                f"FLUTTER := $(FLUTTER_HOME)/bin/flutter\n"
+                f'FLUTTER := "$(FLUTTER_HOME)/bin/flutter"\n'
                 f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
             )
             version_dep = " check-flutter-version"
+            # Use flutter pub get to enforce the pubspec.yaml >=constraint natively
             version_target = """
 check-flutter-version:
-\t@CURRENT=$$($(FLUTTER) --version 2>/dev/null | head -1 | awk '{print $$2}'); \\
-\tif [ "$$CURRENT" != "$(FLUTTER_REQUIRED_VERSION)" ]; then \\
-\t\techo "Flutter version mismatch: installed=$$CURRENT required=$(FLUTTER_REQUIRED_VERSION)"; \\
-\t\techo "Switch versions with: flutter upgrade or install Flutter $(FLUTTER_REQUIRED_VERSION) from https://docs.flutter.dev/release/archive"; \\
-\t\texit 1; \\
-\telse \\
-\t\techo "Flutter $$CURRENT ok"; \\
-\tfi
+\t@echo "Checking Flutter SDK satisfies >=$(FLUTTER_REQUIRED_VERSION) (pubspec.yaml)..."
+\t@$(FLUTTER) pub get
 
 .PHONY: check-flutter-version
 """
@@ -162,6 +150,13 @@ check-flutter-version:
             version_target = ""
 
         flutter_cmd = "$(FLUTTER)" if ver else "flutter"
+
+        generate_target = ""
+        if self.config.database == "sqlite":
+            generate_target = f"""
+generate:{version_dep}
+\tdart run build_runner build --delete-conflicting-outputs
+"""
 
         web_target = ""
         if "web" in self.config.platforms:
@@ -204,10 +199,10 @@ test:{version_dep}
 integration:{version_dep}
 \t{flutter_cmd} test integration_test
 
-upgrade:
+upgrade:{version_dep}
 \t{flutter_cmd} pub upgrade
 
-upgrade-check:
+upgrade-check:{version_dep}
 \t{flutter_cmd} pub get
 {generate_target}{android_sdk_target}{version_target}"""
 

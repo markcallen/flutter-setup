@@ -18,9 +18,9 @@ help:
 	@echo "  clean              - Remove build artifacts and caches"
 
 check-deps:
-	@which uv > /dev/null 2>&1 || (echo "ERROR: uv not found. Install from https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
-	@which git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
-	@python3 -c "import sys; assert sys.version_info >= (3, 12), f'Python 3.12+ required, found {sys.version}'" \
+	@command -v uv > /dev/null 2>&1 || (echo "ERROR: uv not found. Install from https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
+	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
+	@python3 -c "import sys; sys.exit(0) if sys.version_info >= (3, 12) else sys.exit('Python 3.12+ required, found ' + sys.version)" \
 		|| (echo "ERROR: Python 3.12+ required." && exit 1)
 	@echo "OK: uv, git, and Python 3.12+ all present"
 
