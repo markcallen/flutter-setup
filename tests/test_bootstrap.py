@@ -204,11 +204,14 @@ class TestProjectBootstrap:
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
             bootstrap = ProjectBootstrap(config)
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
-                env_file = config.project_path / ".env"
-                assert env_file.exists()
+                assert (config.project_path / ".env").exists()
+                pubspec = yaml.safe_load(pubspec_path.read_text())
+                assert ".env" in pubspec["flutter"]["assets"]
 
     def test_modify_main_dart_exists(self, config: Config) -> None:
         """Test modifying main.dart when it exists."""
@@ -435,6 +438,9 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "run-ios:" in content
             assert "run-android:" in content
+            assert "check-android-sdk" in content
+            assert "ANDROID_SDK_ROOT" in content
+            assert "REQUIRED_NDK" in content
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
@@ -495,6 +501,9 @@ class TestProjectBootstrap:
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
+            (config.project_path / "pubspec.yaml").write_text(
+                "flutter:\n  uses-material-design: true\n"
+            )
             bootstrap = ProjectBootstrap(config)
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
@@ -502,6 +511,38 @@ class TestProjectBootstrap:
                 content = env_file.read_text()
                 assert "API_URL" in content
                 assert "https://api.example.com" in content
+
+    def test_add_env_asset_to_pubspec(self, config: Config) -> None:
+        """Test that .env is added to pubspec.yaml flutter assets."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert ".env" in pubspec["flutter"]["assets"]
+
+    def test_add_env_asset_to_pubspec_no_file(self, config: Config) -> None:
+        """Test _add_env_asset_to_pubspec is a no-op when pubspec.yaml is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()  # should not raise
+
+    def test_add_env_asset_to_pubspec_idempotent(self, config: Config) -> None:
+        """Test _add_env_asset_to_pubspec does not duplicate .env."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  assets:\n    - .env\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_asset_to_pubspec()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["flutter"]["assets"].count(".env") == 1
 
     def test_create_readme_content(self, config: Config) -> None:
         """Test README file content."""

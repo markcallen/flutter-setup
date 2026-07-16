@@ -167,10 +167,32 @@ check-flutter-version:
         if "web" in self.config.platforms:
             web_target = f"run-chrome:{version_dep}\n\t{flutter_cmd} run -d chrome\n\n"
 
-        makefile_content = f"""{version_header}{web_target}run-ios:{version_dep}
+        android_sdk_header = ""
+        android_sdk_dep = ""
+        android_sdk_target = ""
+        if "android" in self.config.platforms:
+            android_sdk_header = (
+                "ANDROID_SDK_ROOT ?= $(or $(ANDROID_HOME),/opt/android-sdk)\n"
+                "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
+                "REQUIRED_NDK := 27.0.12077973\n\n"
+            )
+            android_sdk_dep = " check-android-sdk"
+            android_sdk_target = """
+check-android-sdk:
+\t@if [ ! -f "$(ANDROID_SDK_ROOT)/ndk/$(REQUIRED_NDK)/source.properties" ]; then \\
+\t\techo "NDK $(REQUIRED_NDK) missing or incomplete, installing..."; \\
+\t\t$(SDKMANAGER) "ndk;$(REQUIRED_NDK)"; \\
+\telse \\
+\t\techo "NDK $(REQUIRED_NDK) ok"; \\
+\tfi
+
+.PHONY: check-android-sdk
+"""
+
+        makefile_content = f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
 \t{flutter_cmd} run -d ios
 
-run-android:{version_dep}
+run-android:{version_dep}{android_sdk_dep}
 \t{flutter_cmd} run -d android
 
 analyze:{version_dep}
@@ -187,7 +209,7 @@ upgrade:
 
 upgrade-check:
 \t{flutter_cmd} pub get
-{generate_target}{version_target}"""
+{generate_target}{android_sdk_target}{version_target}"""
 
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
@@ -713,10 +735,30 @@ API_URL=https://api.example.com
         with open(self.config.project_path / ".env", "w") as f:
             f.write(env_content)
 
+        # Declare .env as a Flutter asset so it gets bundled into the app
+        self._add_env_asset_to_pubspec()
+
         # Modify main.dart to load .env
         self._modify_main_dart()
 
         console.print("  ✅ Environment support created")
+
+    def _add_env_asset_to_pubspec(self) -> None:
+        """Add .env to the flutter assets list in pubspec.yaml."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            flutter_section = pubspec.setdefault("flutter", {})
+            assets = flutter_section.setdefault("assets", [])
+            if ".env" not in assets:
+                assets.append(".env")
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add .env to pubspec.yaml assets: {e}")
 
     def _modify_main_dart(self) -> None:
         """Modify main.dart to load environment variables."""
