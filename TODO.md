@@ -297,11 +297,11 @@
 - [ ] Improve code documentation and docstrings
 - [ ] Set up pre-commit hooks for code quality
 - [ ] Linux enablement follow-ups:
-  - [ ] Add Fedora/RHEL (`dnf`) prerequisite support
-  - [ ] Add distro detection and package-manager abstraction tests
-  - [ ] Improve shell profile strategy for non-bash Linux shells
-  - [ ] Add explicit Linux troubleshooting guidance for `flutter doctor` failures
-  - [ ] Add CI scenario that exercises Linux prerequisite checks in dry-run mode
+  - [ ] Add Fedora/RHEL (`dnf`) prerequisite support — [#35](https://github.com/markcallen/flutter-setup/issues/35)
+  - [ ] Add distro detection and package-manager abstraction tests — [#36](https://github.com/markcallen/flutter-setup/issues/36)
+  - [ ] Improve shell profile strategy for non-bash Linux shells — [#37](https://github.com/markcallen/flutter-setup/issues/37)
+  - [ ] Add explicit Linux troubleshooting guidance for `flutter doctor` failures — [#38](https://github.com/markcallen/flutter-setup/issues/38)
+  - [ ] Add CI scenario that exercises Linux prerequisite checks in dry-run mode — [#39](https://github.com/markcallen/flutter-setup/issues/39)
 
 ---
 
