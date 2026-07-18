@@ -23,13 +23,27 @@ def _extract_makefile_target_names(content: str) -> set[str]:
     return names
 
 
-def _filter_new_makefile_content(new_content: str, existing_targets: set[str]) -> str:
-    """Return only the target blocks from new_content whose names are not in existing_targets.
+def _is_var_defined_in(line: str, content: str) -> bool:
+    """Return True if line is a variable assignment whose name is already defined in content."""
+    m = _re.match(r"^([A-Z_][A-Z0-9_]*)\s*[:?]?=", line)
+    if not m:
+        return False
+    var_name = m.group(1)
+    return bool(
+        _re.search(rf"^{_re.escape(var_name)}\s*[:?]?=", content, _re.MULTILINE)
+    )
 
-    Non-target preamble blocks (variable assignments, etc.) are excluded because
-    they are assumed to already exist in the Makefile being appended to.
+
+def _filter_new_makefile_content(
+    new_content: str, existing_targets: set[str], existing_content: str = ""
+) -> str:
+    """Return parts of new_content not already present in the existing Makefile.
+
+    Target blocks whose names are in existing_targets are skipped. Preamble
+    variable lines are included only when their variable name is not already
+    defined in existing_content — ensuring appended targets that reference
+    $(FLUTTER), $(ANDROID_SDK_ROOT), etc. will find those variables.
     """
-    # Split new_content into blocks: each block starts at a target line
     blocks = _re.split(
         r"(?=^[a-zA-Z][a-zA-Z0-9_-]*\s*:(?!=))", new_content, flags=_re.MULTILINE
     )
@@ -43,7 +57,15 @@ def _filter_new_makefile_content(new_content: str, existing_targets: set[str]) -
             target_name = target_match.group(1)
             if target_name not in existing_targets:
                 result.append(block)
-        # Non-target blocks (preamble variable assignments) are skipped entirely
+        else:
+            # Preamble block: include variable lines not already defined
+            missing = [
+                line
+                for line in block.splitlines(keepends=True)
+                if not _is_var_defined_in(line, existing_content)
+            ]
+            if any(ln.strip() for ln in missing):
+                result.append("".join(missing))
     return "".join(result)
 
 
@@ -301,7 +323,9 @@ upgrade-check:{version_dep}
 
         existing = makefile.read_text()
         existing_targets = _extract_makefile_target_names(existing)
-        to_append = _filter_new_makefile_content(new_content, existing_targets)
+        to_append = _filter_new_makefile_content(
+            new_content, existing_targets, existing
+        )
 
         if to_append:
             with open(makefile, "a") as f:

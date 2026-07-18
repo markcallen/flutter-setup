@@ -203,6 +203,39 @@ class TestFilterNewMakefileContent:
         result = _filter_new_makefile_content(new_content, existing)
         assert "flutter run -d ios" in result
 
+    def test_includes_missing_preamble_variables(self) -> None:
+        new_content = "FLUTTER := flutter\n\ntest:\n\tflutter test\n"
+        existing_targets: set[str] = set()
+        existing_content = "# My Makefile\n"
+        result = _filter_new_makefile_content(
+            new_content, existing_targets, existing_content
+        )
+        assert "FLUTTER :=" in result
+        assert "test:" in result
+
+    def test_skips_already_defined_preamble_variables(self) -> None:
+        new_content = "FLUTTER := flutter\n\ntest:\n\tflutter test\n"
+        existing_targets: set[str] = set()
+        existing_content = "FLUTTER := /usr/local/flutter/bin/flutter\n"
+        result = _filter_new_makefile_content(
+            new_content, existing_targets, existing_content
+        )
+        assert "FLUTTER :=" not in result
+        assert "test:" in result
+
+    def test_includes_only_missing_variables_from_preamble(self) -> None:
+        new_content = (
+            "FLUTTER_HOME := /flutter\nFLUTTER := flutter\n\ntest:\n\t$(FLUTTER) test\n"
+        )
+        existing_targets: set[str] = set()
+        existing_content = "FLUTTER_HOME := /other/flutter\n"
+        result = _filter_new_makefile_content(
+            new_content, existing_targets, existing_content
+        )
+        assert "FLUTTER_HOME" not in result
+        assert "FLUTTER :=" in result
+        assert "test:" in result
+
 
 # ---------------------------------------------------------------------------
 # ProjectBootstrap.append_project

@@ -469,7 +469,7 @@ def setup_command(
         # Prompt for required arguments if not provided on the command line
         if project_name is None:
             project_name = click.prompt("Project name", type=str)
-        assert project_name is not None
+        project_name = cast(str, project_name)
 
         if not platforms:
             console.print(
