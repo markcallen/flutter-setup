@@ -136,10 +136,15 @@ class ProjectBootstrap:
                 f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
             )
             version_dep = " check-flutter-version"
-            # Use flutter pub get to enforce the pubspec.yaml >=constraint natively
             version_target = """
 check-flutter-version:
-\t@echo "Checking Flutter SDK satisfies >=$(FLUTTER_REQUIRED_VERSION) (pubspec.yaml)..."
+\t@ACTUAL=$$($(FLUTTER) --version 2>&1 | awk '/^Flutter [0-9]/{print $$2; exit}'); \\
+\tif [ -z "$$ACTUAL" ]; then \\
+\t\techo "ERROR: Could not determine Flutter version at $(FLUTTER_HOME)"; exit 1; \\
+\tfi; \\
+\techo "  Detected Flutter $$ACTUAL (required: >=$(FLUTTER_REQUIRED_VERSION))"; \\
+\tpython3 -c "import sys; a=tuple(map(int,'$$ACTUAL'.split('.'))); r=tuple(map(int,'$(FLUTTER_REQUIRED_VERSION)'.split('.'))); sys.exit(0 if a>=r else 1)" 2>/dev/null || \\
+\t{ echo "ERROR: Flutter $$ACTUAL does not satisfy >=$$FLUTTER_REQUIRED_VERSION"; exit 1; }
 \t@$(FLUTTER) pub get
 
 .PHONY: check-flutter-version

@@ -95,6 +95,23 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "analyze:" in content
 
+    def test_check_flutter_version_target_verifies_version(
+        self, config: Config
+    ) -> None:
+        """Test that check-flutter-version target compares actual vs required version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.flutter_version = "3.32.0"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            # The target must run flutter --version and compare against the required version
+            assert "--version" in content
+            assert "FLUTTER_REQUIRED_VERSION" in content
+            # python3 comparison must be present in the target body
+            assert "python3" in content
+
     def test_patch_android_ndk_version(self, config: Config) -> None:
         """Test that build.gradle.kts is patched to pin the NDK version."""
         with tempfile.TemporaryDirectory() as tmpdir:
