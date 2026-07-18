@@ -453,7 +453,9 @@ import 'src/app/app.dart';
 
 Future<void> main() async {{
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  try {{
+    await dotenv.load(fileName: '.env');
+  }} catch (_) {{}}
 {firebase_init}\
   runApp(const ProviderScope(child: App()));
 }}
@@ -848,7 +850,7 @@ API_URL=https://api.example.com
                 modified_content = "\n".join(lines)
                 modified_content = modified_content.replace(
                     "void main() {",
-                    'Future<void> main() async {\n  await dotenv.load(fileName: ".env");',
+                    'Future<void> main() async {\n  try {\n    await dotenv.load(fileName: ".env");\n  } catch (_) {}',
                 )
 
                 with open(main_dart, "w") as f:

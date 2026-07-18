@@ -289,6 +289,22 @@ class TestProjectBootstrap:
             content = main_dart.read_text()
             assert "flutter_dotenv" in content
 
+    def test_modify_main_dart_wraps_dotenv_in_try_catch(self, config: Config) -> None:
+        """Test that the dotenv.load() call is wrapped in try/catch."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "lib").mkdir(parents=True)
+            main_dart = config.project_path / "lib" / "main.dart"
+            main_dart.write_text(
+                "import 'package:flutter/material.dart';\nvoid main() {\n  runApp(MyApp());\n}"
+            )
+            bootstrap._modify_main_dart()
+            content = main_dart.read_text()
+            assert "try {" in content
+            assert "dotenv.load" in content
+            assert "} catch (_) {}" in content
+
     def test_modify_main_dart_not_exists(self, config: Config) -> None:
         """Test modifying main.dart when it doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
