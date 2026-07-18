@@ -348,6 +348,7 @@ upgrade-check:{version_dep}
         self._append_vscode_config()
         self._append_makefile()
         self._create_cicd()
+        self._append_readme()
         console.print("  ✅ Tooling appended")
 
     def _patch_android_ndk_version(self) -> None:
@@ -971,8 +972,8 @@ API_URL=https://api.example.com
         except Exception as e:
             console.print(f"  ⚠️  Main.dart modification warning: {e}")
 
-    def _create_readme(self) -> None:
-        """Create README file."""
+    def _build_readme_section(self) -> str:
+        """Return the flutter-setup tooling section for README.md."""
         if "web" in self.config.platforms:
             run_cmd = "make run-chrome      # runs on Chrome"
         elif "ios" in self.config.platforms:
@@ -982,52 +983,70 @@ API_URL=https://api.example.com
         else:
             run_cmd = "flutter run"
 
-        readme_content = f"""# {self.config.project_name}
+        return f"""## flutter-setup
 
-Flutter app scaffolded for Cursor.
-
-## Quickstart
+### Quickstart
 ```bash
 flutter pub get
 {run_cmd}
 ```
 
-## Testing
+### Testing
 ```bash
 make test           # unit + widget tests
 make integration    # integration_test/
 ```
 
-## Linting
+### Linting
 ```bash
 make analyze
 ```
 
-## Env vars
+### Env vars
 Edit `.env` and access with `dotenv.env['KEY']` after startup.
 
-## Architecture
-Architecture scaffold: `{self.config.architecture}`.
-
-## Persistence
-Local database scaffold: `{self.config.database}`.
-
-## Testing
-Testing starter: `{self.config.testing}`.
-
-## Firebase
-Auth provider: `{self.config.auth_provider}`.
-Cloud database: `{self.config.cloud_database}`.
-Notifications: `{self.config.notifications_provider}`.
-
-When Firebase options are enabled, run `flutterfire configure` for this
-project before using the generated Firebase services.
+### Scaffold configuration
+- Architecture: `{self.config.architecture}`
+- Database: `{self.config.database}`
+- Testing: `{self.config.testing}`
+- Auth provider: `{self.config.auth_provider}`
+- Cloud database: `{self.config.cloud_database}`
+- Notifications: `{self.config.notifications_provider}`
 """
 
-        with open(self.config.project_path / "README.md", "w") as f:
-            f.write(readme_content)
+    def _create_readme(self) -> None:
+        """Create README file."""
+        readme_path = self.config.project_path / "README.md"
+        if readme_path.exists():
+            console.print(
+                "  ⚠️  README.md already exists — skipping (use append to add a section)"
+            )
+            return
 
+        readme_content = (
+            f"# {self.config.project_name}\n\nFlutter app scaffolded for Cursor.\n\n"
+            + self._build_readme_section()
+        )
+        readme_path.write_text(readme_content)
         console.print("  ✅ README created")
+
+    def _append_readme(self) -> None:
+        """Append a flutter-setup section to an existing README, or create one."""
+        readme_path = self.config.project_path / "README.md"
+        section = self._build_readme_section()
+        if not readme_path.exists():
+            readme_path.write_text(f"# {self.config.project_name}\n\n" + section)
+            console.print("  ✅ README created")
+        else:
+            existing = readme_path.read_text()
+            if "## flutter-setup" in existing:
+                console.print(
+                    "  ⚠️  README.md already has a flutter-setup section — skipping"
+                )
+            else:
+                with open(readme_path, "a") as f:
+                    f.write("\n" + section)
+                console.print("  ✅ flutter-setup section appended to README.md")
 
     def _format_code(self) -> None:
         """Format the generated code."""

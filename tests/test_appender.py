@@ -262,10 +262,12 @@ class TestAppendProject:
         with patch.object(bootstrap, "_append_vscode_config") as mock_vscode:
             with patch.object(bootstrap, "_append_makefile") as mock_makefile:
                 with patch.object(bootstrap, "_create_cicd") as mock_cicd:
-                    bootstrap.append_project()
-                    mock_vscode.assert_called_once()
-                    mock_makefile.assert_called_once()
-                    mock_cicd.assert_called_once()
+                    with patch.object(bootstrap, "_append_readme") as mock_readme:
+                        bootstrap.append_project()
+                        mock_vscode.assert_called_once()
+                        mock_makefile.assert_called_once()
+                        mock_cicd.assert_called_once()
+                        mock_readme.assert_called_once()
 
     def test_append_vscode_config_skips_existing_without_force(
         self, tmp_path: Path
@@ -367,3 +369,54 @@ class TestAppendProject:
         final_content = (project_dir / "Makefile").read_text()
         # Content should not grow (no new targets to add)
         assert len(final_content) == original_size
+
+    def test_append_readme_creates_when_absent(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        project_dir = tmp_path / "myapp"
+        project_dir.mkdir()
+
+        bootstrap = ProjectBootstrap(config, force=False)
+        bootstrap._append_readme()
+
+        readme = project_dir / "README.md"
+        assert readme.exists()
+        assert "## flutter-setup" in readme.read_text()
+
+    def test_append_readme_appends_section_to_existing(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        project_dir = tmp_path / "myapp"
+        project_dir.mkdir()
+        (project_dir / "README.md").write_text("# Existing Project\n\nSome content.\n")
+
+        bootstrap = ProjectBootstrap(config, force=False)
+        bootstrap._append_readme()
+
+        content = (project_dir / "README.md").read_text()
+        assert "# Existing Project" in content
+        assert "## flutter-setup" in content
+
+    def test_append_readme_skips_when_section_already_present(
+        self, tmp_path: Path
+    ) -> None:
+        config = _make_config(tmp_path)
+        project_dir = tmp_path / "myapp"
+        project_dir.mkdir()
+        existing = "# My App\n\n## flutter-setup\n\nAlready here.\n"
+        (project_dir / "README.md").write_text(existing)
+
+        bootstrap = ProjectBootstrap(config, force=False)
+        bootstrap._append_readme()
+
+        assert (project_dir / "README.md").read_text() == existing
+
+    def test_create_readme_skips_when_file_exists(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        project_dir = tmp_path / "myapp"
+        project_dir.mkdir()
+        original = "# Hand-written README\n"
+        (project_dir / "README.md").write_text(original)
+
+        bootstrap = ProjectBootstrap(config, force=False)
+        bootstrap._create_readme()
+
+        assert (project_dir / "README.md").read_text() == original
