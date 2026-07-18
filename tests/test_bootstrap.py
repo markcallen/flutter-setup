@@ -210,8 +210,53 @@ class TestProjectBootstrap:
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
                 assert (config.project_path / ".env").exists()
+                assert (config.project_path / ".env.example").exists()
+                gitignore = config.project_path / ".gitignore"
+                assert gitignore.exists()
+                assert ".env" in gitignore.read_text()
                 pubspec = yaml.safe_load(pubspec_path.read_text())
                 assert ".env" in pubspec["flutter"]["assets"]
+
+    def test_create_environment_support_skips_existing_files(
+        self, config: Config
+    ) -> None:
+        """Test that existing .env and .env.example are not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
+            (config.project_path / ".env").write_text("EXISTING=1\n")
+            (config.project_path / ".env.example").write_text("EXISTING_EXAMPLE=1\n")
+            bootstrap = ProjectBootstrap(config)
+            with patch.object(bootstrap, "_modify_main_dart"):
+                bootstrap._create_environment_support()
+                assert (config.project_path / ".env").read_text() == "EXISTING=1\n"
+                assert (
+                    config.project_path / ".env.example"
+                ).read_text() == "EXISTING_EXAMPLE=1\n"
+
+    def test_add_env_to_gitignore_appends(self, config: Config) -> None:
+        """Test that .env is appended to an existing .gitignore."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            gitignore = config.project_path / ".gitignore"
+            gitignore.write_text("build/\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_to_gitignore()
+            assert ".env" in gitignore.read_text()
+
+    def test_add_env_to_gitignore_no_duplicate(self, config: Config) -> None:
+        """Test that .env is not duplicated if already in .gitignore."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            gitignore = config.project_path / ".gitignore"
+            gitignore.write_text(".env\nbuild/\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_to_gitignore()
+            assert gitignore.read_text().count(".env") == 1
 
     def test_modify_main_dart_exists(self, config: Config) -> None:
         """Test modifying main.dart when it exists."""

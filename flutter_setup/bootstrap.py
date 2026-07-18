@@ -722,13 +722,24 @@ class FirebaseNotificationsService {
 
     def _create_environment_support(self) -> None:
         """Create environment variable support."""
-        # Create .env file
-        env_content = """# Example environment variables
+        env_example_content = """# Environment variables — copy to .env and fill in real values.
+# .env is gitignored; .env.example is checked in as a reference.
+API_URL=https://api.example.com
+"""
+        env_content = """# Local environment variables (gitignored — never commit real secrets).
 API_URL=https://api.example.com
 """
 
-        with open(self.config.project_path / ".env", "w") as f:
-            f.write(env_content)
+        env_example = self.config.project_path / ".env.example"
+        if not env_example.exists():
+            env_example.write_text(env_example_content)
+
+        env_file = self.config.project_path / ".env"
+        if not env_file.exists():
+            env_file.write_text(env_content)
+
+        # Keep .env out of version control
+        self._add_env_to_gitignore()
 
         # Declare .env as a Flutter asset so it gets bundled into the app
         self._add_env_asset_to_pubspec()
@@ -737,6 +748,23 @@ API_URL=https://api.example.com
         self._modify_main_dart()
 
         console.print("  ✅ Environment support created")
+
+    def _add_env_to_gitignore(self) -> None:
+        """Ensure .env is listed in .gitignore."""
+        gitignore_path = self.config.project_path / ".gitignore"
+        entry = ".env\n"
+        if gitignore_path.exists():
+            content = gitignore_path.read_text()
+            lines = content.splitlines()
+            if any(line.strip() == ".env" for line in lines):
+                return
+            with open(gitignore_path, "a") as f:
+                if content and not content.endswith("\n"):
+                    f.write("\n")
+                f.write("\n# Environment variables\n")
+                f.write(entry)
+        else:
+            gitignore_path.write_text(f"# Environment variables\n{entry}")
 
     def _add_env_asset_to_pubspec(self) -> None:
         """Add .env to the flutter assets list in pubspec.yaml."""
