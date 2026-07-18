@@ -342,6 +342,21 @@ class TestProjectBootstrap:
             assert "onCreate" in content
             assert "onUpgrade" in content
 
+    def test_sqlite_scaffold_onupgrade_is_not_silent_noop(self, config: Config) -> None:
+        """Test that onUpgrade throws instead of silently skipping migrations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            data_dir = config.project_path / "lib" / "src" / "core" / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_sqlite_scaffold()
+            content = (data_dir / "app_database.dart").read_text()
+            # onUpgrade must not be an empty async stub
+            assert "onUpgrade: (m, from, to) async {}," not in content
+            # must actively signal that migration is needed
+            assert "UnimplementedError" in content
+
     def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
         """Test that drift_dev is written directly to pubspec.yaml for sqlite projects."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -636,6 +651,38 @@ class TestProjectBootstrap:
             assert config.package_name in integration_test
             assert "IntegrationTestWidgetsFlutterBinding" in integration_test
 
+    def test_widget_test_includes_pump_and_settle(self, config: Config) -> None:
+        """Test that generated widget test calls pumpAndSettle before asserting."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            widget_content = (
+                config.project_path / "test" / "widget" / "app_widget_test.dart"
+            ).read_text()
+            assert "pumpAndSettle" in widget_content
+            assert "find.text('Home')" in widget_content
+
+    def test_integration_test_includes_pump_and_settle(self, config: Config) -> None:
+        """Test that generated integration test calls pumpAndSettle before asserting."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            integration_content = (
+                config.project_path / "integration_test" / "app_test.dart"
+            ).read_text()
+            assert "pumpAndSettle" in integration_content
+            assert "find.text('Home')" in integration_content
+
     def test_create_environment_support_env_content(self, config: Config) -> None:
         """Test .env file content."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -724,6 +771,46 @@ class TestProjectBootstrap:
             main_content = (config.project_path / "lib" / "main.dart").read_text()
             assert "ProviderScope" in main_content
             assert "src/app/app.dart" in main_content
+
+    def test_clean_architecture_app_uses_stateless_widget(self, config: Config) -> None:
+        """Test that App uses StatelessWidget, not ConsumerWidget."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert "StatelessWidget" in app_content
+            assert "ConsumerWidget" not in app_content
+            assert "WidgetRef" not in app_content
+
+    def test_clean_architecture_home_screen_uses_stateless_widget(
+        self, config: Config
+    ) -> None:
+        """Test that HomeScreen uses StatelessWidget, not ConsumerWidget."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            screen_content = (
+                config.project_path
+                / "lib"
+                / "src"
+                / "features"
+                / "home"
+                / "presentation"
+                / "home_screen.dart"
+            ).read_text()
+            assert "StatelessWidget" in screen_content
+            assert "ConsumerWidget" not in screen_content
+            assert "WidgetRef" not in screen_content
 
     def test_create_sqlite_scaffold(self, config: Config) -> None:
         """Test creating Drift SQLite scaffold."""
@@ -939,6 +1026,40 @@ class TestProjectBootstrap:
 
         makefile = (project_dir / "Makefile").read_text()
         assert "generate: check-flutter-version" in makefile
+
+    def test_create_makefile_test_depends_on_generate_for_sqlite(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """test, analyze, and integration targets depend on generate for sqlite projects."""
+        config.output_dir = tmp_path
+        config.database = "sqlite"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "test: check-flutter-version generate" in makefile
+        assert "analyze: check-flutter-version generate" in makefile
+        assert "integration: check-flutter-version generate" in makefile
+
+    def test_create_makefile_test_does_not_depend_on_generate_without_sqlite(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """test target does not depend on generate for non-sqlite projects."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "test: check-flutter-version\n" in makefile
+        assert "generate" not in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(
         self, config: Config, tmp_path: Path

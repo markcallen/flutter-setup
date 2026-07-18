@@ -157,11 +157,13 @@ check-flutter-version:
         flutter_cmd = "$(FLUTTER)" if ver else "flutter"
 
         generate_target = ""
+        codegen_dep = ""
         if self.config.database == "sqlite":
             generate_target = f"""
 generate:{version_dep}
 \tdart run build_runner build --delete-conflicting-outputs
 """
+            codegen_dep = " generate"
 
         web_target = ""
         if "web" in self.config.platforms:
@@ -195,13 +197,13 @@ check-android-sdk:
 run-android:{version_dep}{android_sdk_dep}
 \t{flutter_cmd} run -d android
 
-analyze:{version_dep}
+analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
 
-test:{version_dep}
+test:{version_dep}{codegen_dep}
 \t{flutter_cmd} test
 
-integration:{version_dep}
+integration:{version_dep}{codegen_dep}
 \t{flutter_cmd} test integration_test
 
 upgrade:{version_dep}
@@ -295,13 +297,19 @@ void main() {
             pump_widget = f"const ProviderScope(child: {app_widget}())"
 
         # Widget test
+        if self.config.architecture == "clean":
+            widget_assertion = "expect(find.text('Home'), findsOneWidget);"
+        else:
+            widget_assertion = f"expect(find.byType({app_widget}), findsOneWidget);"
+
         widget_test = f"""import 'package:flutter_test/flutter_test.dart';
 {riverpod_import}import '{app_import}';
 
 void main() {{
   testWidgets('App loads without errors', (tester) async {{
     await tester.pumpWidget({pump_widget});
-    expect(find.byType({app_widget}), findsOneWidget);
+    await tester.pumpAndSettle();
+    {widget_assertion}
   }});
 }}
 """
@@ -312,6 +320,13 @@ void main() {{
             f.write(widget_test)
 
         # Integration test
+        if self.config.architecture == "clean":
+            integration_assertion = "expect(find.text('Home'), findsOneWidget);"
+        else:
+            integration_assertion = (
+                f"expect(find.byType({app_widget}), findsOneWidget);"
+            )
+
         integration_test = f"""import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -328,7 +343,8 @@ void main() {{
 
   testWidgets('home page renders', (tester) async {{
     await tester.pumpWidget({pump_widget});
-    expect(find.byType({app_widget}), findsOneWidget);
+    await tester.pumpAndSettle();
+    {integration_assertion}
   }});
 }}
 """
@@ -394,15 +410,14 @@ linter:
 
         (src_dir / "app" / "app.dart").write_text(
             """import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/home/presentation/home_screen.dart';
 
-class App extends ConsumerWidget {
+class App extends StatelessWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter App',
       theme: ThemeData(useMaterial3: true),
@@ -417,13 +432,12 @@ class App extends ConsumerWidget {
             src_dir / "features" / "home" / "presentation" / "home_screen.dart"
         ).write_text(
             """import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
         child: Text('Home'),
@@ -503,7 +517,9 @@ class AppDatabase extends _$AppDatabase {
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
-    onUpgrade: (m, from, to) async {},
+    onUpgrade: (m, from, to) async {
+      throw UnimplementedError('Add migration steps for v$from -> v$to');
+    },
   );
 }
 

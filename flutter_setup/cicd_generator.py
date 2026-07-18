@@ -23,6 +23,7 @@ class CicdGenerator:
         self.platforms = [p.lower() for p in config.platforms]
         self.flutter_channel = config.channel
         self.flutter_version = self._get_current_flutter_version()
+        self.needs_codegen = config.database == "sqlite"
 
     def _get_current_flutter_version(self) -> str:
         """Get the current Flutter version from the installed Flutter SDK."""
@@ -66,6 +67,15 @@ class CicdGenerator:
                 f"  ⚠️  Error detecting Flutter version: {e}, using '3.38.0' as default"
             )
             return "3.38.0"
+
+    def _codegen_step(self) -> str:
+        """Return the build_runner code generation step for workflows that need it."""
+        if not self.needs_codegen:
+            return ""
+        return """
+      - name: Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+"""
 
     def generate_cicd(self) -> None:
         """Generate all CI/CD files."""
@@ -130,7 +140,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Analyze
         run: flutter analyze
 
@@ -242,7 +252,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Run unit tests
         run: flutter test --coverage
 
@@ -306,7 +316,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
@@ -315,7 +325,7 @@ jobs:
         with:
           name: ios-build
           path: build/ios/iphoneos/Runner.app
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-ios.yml"
@@ -360,7 +370,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build APK
         run: flutter build apk --release
 
@@ -372,14 +382,14 @@ jobs:
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: android-aab
           path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-android.yml"
@@ -418,7 +428,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Web
         run: flutter build web --release
 
@@ -427,7 +437,7 @@ jobs:
         with:
           name: web-build
           path: build/web
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-web.yml"
@@ -466,7 +476,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build macOS
         run: flutter build macos --release
 
@@ -475,7 +485,7 @@ jobs:
         with:
           name: macos-build
           path: build/macos/Build/Products/Release
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-macos.yml"
@@ -526,7 +536,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Linux
         run: flutter build linux --release
 
@@ -535,7 +545,7 @@ jobs:
         with:
           name: linux-build
           path: build/linux/x64/release/bundle
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-linux.yml"
@@ -574,7 +584,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Windows
         run: flutter build windows --release
 
@@ -583,7 +593,7 @@ jobs:
         with:
           name: windows-build
           path: build/windows/x64/runner/Release
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-windows.yml"
