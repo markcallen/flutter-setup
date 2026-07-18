@@ -444,7 +444,7 @@ class TestCLI:
 class TestAppendCommand:
     """Tests for the append CLI command."""
 
-    def _base_config(self) -> dict:  # type: ignore[type-arg]
+    def _base_config(self) -> dict[str, dict[str, str]]:
         return {
             "flutter": {"location": "/flutter", "channel": "stable"},
             "project": {},
@@ -700,3 +700,19 @@ class TestAppendCommand:
                             assert result.exit_code == 0
                             config = mock_bs_class.call_args.args[0]
                             assert "flutter" in str(config.flutter_location)
+
+    def test_append_non_flutter_interactive_invalid_platforms(
+        self, tmp_path: Path
+    ) -> None:
+        """Invalid platform names in interactive mode raise a UsageError."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=False):
+                with patch("flutter_setup.cli._is_interactive", return_value=True):
+                    result = runner.invoke(
+                        cli,
+                        ["append", "myapp", "--dir", str(tmp_path)],
+                        input="ios typo\n",
+                    )
+                    assert result.exit_code != 0

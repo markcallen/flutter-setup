@@ -9,7 +9,12 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
-from .appender import detect_flutter_project, detect_platforms, get_pubspec_name
+from .appender import (
+    PLATFORM_DIRS,
+    detect_flutter_project,
+    detect_platforms,
+    get_pubspec_name,
+)
 from .bootstrap import ProjectBootstrap
 from .core import FlutterSetup
 from .config import (
@@ -33,6 +38,7 @@ from .flutter_manager import FlutterManager
 from .platform import detect_runtime_platform
 
 console = Console()
+VALID_PLATFORMS = set(PLATFORM_DIRS.keys())
 
 
 def _is_interactive() -> bool:
@@ -849,6 +855,12 @@ def append_command(
                     default="ios android",
                 )
                 platforms_list = [p.strip() for p in platforms_str.split() if p.strip()]
+                invalid = [p for p in platforms_list if p not in VALID_PLATFORMS]
+                if invalid:
+                    raise click.UsageError(
+                        f"Unknown platform(s): {', '.join(invalid)}. "
+                        f"Valid options: {', '.join(sorted(VALID_PLATFORMS))}"
+                    )
 
             config = Config(
                 project_name=project_name,
