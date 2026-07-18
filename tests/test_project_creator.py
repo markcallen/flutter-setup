@@ -51,20 +51,21 @@ class TestProjectCreator:
     def test_create_project_already_exists(
         self, creator: ProjectCreator, config: Config
     ) -> None:
-        """Test create_project when project already exists."""
-        # Patch the property by patching the underlying attributes
+        """Test create_project skips when pubspec.yaml already exists."""
         mock_output_dir = MagicMock()
-        mock_output_dir.__truediv__.return_value = MagicMock(exists=lambda: True)
+        mock_project_path = MagicMock()
+        mock_project_path.__truediv__.return_value.exists.return_value = True
+        mock_output_dir.__truediv__.return_value = mock_project_path
         creator.config.output_dir = mock_output_dir
         creator.create_project()  # Should not raise
 
     def test_create_project_success(
         self, creator: ProjectCreator, config: Config
     ) -> None:
-        """Test successful project creation."""
+        """Test successful project creation when pubspec.yaml is absent."""
         mock_output_dir = MagicMock()
         mock_project_path = MagicMock()
-        mock_project_path.exists.return_value = False
+        mock_project_path.__truediv__.return_value.exists.return_value = False
         mock_output_dir.__truediv__.return_value = mock_project_path
         creator.config.output_dir = mock_output_dir
         with patch("subprocess.run") as mock_run:
@@ -78,7 +79,7 @@ class TestProjectCreator:
         """Test project creation failure."""
         mock_output_dir = MagicMock()
         mock_project_path = MagicMock()
-        mock_project_path.exists.return_value = False
+        mock_project_path.__truediv__.return_value.exists.return_value = False
         mock_output_dir.__truediv__.return_value = mock_project_path
         creator.config.output_dir = mock_output_dir
         with patch("subprocess.run") as mock_run:
