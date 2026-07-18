@@ -9,6 +9,8 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
+from .appender import detect_flutter_project, detect_platforms, get_pubspec_name
+from .bootstrap import ProjectBootstrap
 from .core import FlutterSetup
 from .config import (
     Config,
@@ -467,6 +469,7 @@ def setup_command(
         # Prompt for required arguments if not provided on the command line
         if project_name is None:
             project_name = click.prompt("Project name", type=str)
+        assert project_name is not None
 
         if not platforms:
             console.print(
@@ -644,6 +647,247 @@ def setup_command(
         sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n[yellow]⚠️  Setup interrupted by user[/yellow]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]❌ Unexpected error: {e}[/red]")
+        if verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+@cli.command("append")
+@click.argument("project_name", required=False, default=None)
+@click.option(
+    "--dir",
+    "target_dir",
+    default=".",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Target directory (default: current directory)",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing editor config and workflow files",
+)
+@click.option(
+    "--org",
+    default="com.example",
+    help="Organization identifier (default: com.example)",
+)
+@click.option(
+    "--channel",
+    type=click.Choice(["stable", "beta"]),
+    default="stable",
+    help="Flutter channel (default: stable)",
+)
+@click.option(
+    "--template",
+    type=click.Choice(["app", "plugin"]),
+    default="app",
+    help="Project template (default: app)",
+)
+@click.option(
+    "--architecture",
+    type=click.Choice(["basic", "clean"]),
+    default="basic",
+    help="Application architecture scaffold (default: basic)",
+)
+@click.option(
+    "--database",
+    type=click.Choice(["none", "sqlite"]),
+    default="none",
+    help="Local persistence scaffold (default: none)",
+)
+@click.option(
+    "--testing",
+    type=click.Choice(["standard", "mocktail"]),
+    default="standard",
+    help="Testing starter scaffold (default: standard)",
+)
+@click.option(
+    "--auth-provider",
+    type=click.Choice(["none", "firebase"]),
+    default="none",
+    help="Auth integration scaffold (default: none)",
+)
+@click.option(
+    "--cloud-database",
+    type=click.Choice(["none", "firestore"]),
+    default="none",
+    help="Cloud database integration scaffold (default: none)",
+)
+@click.option(
+    "--notifications-provider",
+    type=click.Choice(["none", "firebase"]),
+    default="none",
+    help="Push notifications scaffold (default: none)",
+)
+@click.option(
+    "--ios-language",
+    type=click.Choice(["swift", "objc"]),
+    default="swift",
+    help="iOS language for plugin templates (default: swift)",
+)
+@click.option(
+    "--android-language",
+    type=click.Choice(["kotlin", "java"]),
+    default="kotlin",
+    help="Android language for plugin templates (default: kotlin)",
+)
+@click.option(
+    "--flutter-update",
+    type=click.Choice(["reset", "reclone", "skip"]),
+    default="skip",
+    help="Flutter update mode (default: skip)",
+)
+@click.option(
+    "--flutter-version",
+    default=None,
+    help="Required Flutter SDK version (e.g. 3.24.0).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview actions without executing them",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose output",
+)
+def append_command(
+    project_name: str | None,
+    target_dir: str,
+    force: bool,
+    org: str,
+    channel: FlutterChannel,
+    template: TemplateType,
+    architecture: Architecture,
+    database: Database,
+    testing: Testing,
+    auth_provider: AuthProvider,
+    cloud_database: CloudDatabase,
+    notifications_provider: NotificationsProvider,
+    ios_language: IosLanguage,
+    android_language: AndroidLanguage,
+    flutter_update: UpdateMode,
+    flutter_version: str | None,
+    dry_run: bool,
+    verbose: bool,
+) -> None:
+    """Append flutter-setup tooling to an existing directory.
+
+    If the directory is already a Flutter project, adds editor configs,
+    Makefile targets, and CI/CD workflows without re-creating Flutter files.
+    If not, runs full setup to create the Flutter project first.
+    """
+    try:
+        print_banner()
+
+        # Load configuration from file for Flutter location
+        config_manager = ConfigManager()
+        config_manager.ensure_config_dir()
+        file_config = config_manager.load_config()
+
+        flutter_location_str = file_config.get("flutter", {}).get("location")
+        if flutter_location_str:
+            flutter_location = Path(flutter_location_str)
+        else:
+            flutter_location = Path.home() / "development" / "flutter"
+
+        target_path = Path(target_dir).resolve()
+        is_flutter = detect_flutter_project(target_path)
+
+        if is_flutter:
+            # Existing Flutter project: infer name from directory
+            inferred_name = get_pubspec_name(target_path) or target_path.name
+            platforms = detect_platforms(target_path)
+            console.print(f"[dim]Detected Flutter project: {inferred_name}[/dim]")
+            console.print(f"[dim]Detected platforms: {', '.join(platforms)}[/dim]")
+
+            config = Config(
+                project_name=target_path.name,
+                platforms=platforms,
+                org=org,
+                channel=channel,
+                output_dir=target_path.parent,
+                template="app",
+                ios_language="swift",
+                android_language="kotlin",
+                flutter_update_mode="skip",
+                dry_run=dry_run,
+                verbose=verbose,
+                flutter_location=flutter_location,
+                architecture=architecture,
+                database=database,
+                testing=testing,
+                auth_provider=auth_provider,
+                cloud_database=cloud_database,
+                notifications_provider=notifications_provider,
+                flutter_version=flutter_version,
+            )
+
+            bootstrap = ProjectBootstrap(config, force=force)
+            bootstrap.append_project()
+        else:
+            # Not a Flutter project: require project_name, run full setup
+            if not project_name:
+                raise click.UsageError(
+                    "project_name is required when the target directory is not a Flutter project"
+                )
+
+            platforms_list: list[str]
+            if not _is_interactive():
+                platforms_list = ["ios", "android", "web"]
+            else:
+                console.print(
+                    "[dim]Available platforms: ios, android, macos, linux, windows, web[/dim]"
+                )
+                platforms_str = click.prompt(
+                    "Platforms (space-separated)",
+                    default="ios android",
+                )
+                platforms_list = [
+                    p.strip() for p in platforms_str.split() if p.strip()
+                ]
+
+            config = Config(
+                project_name=project_name,
+                platforms=platforms_list,
+                org=org,
+                channel=channel,
+                output_dir=target_path,
+                template=template,
+                ios_language=ios_language,
+                android_language=android_language,
+                flutter_update_mode=flutter_update,
+                dry_run=dry_run,
+                verbose=verbose,
+                flutter_location=flutter_location,
+                architecture=architecture,
+                database=database,
+                testing=testing,
+                auth_provider=auth_provider,
+                cloud_database=cloud_database,
+                notifications_provider=notifications_provider,
+                flutter_version=flutter_version,
+            )
+
+            setup = FlutterSetup(config)
+            setup.run()
+
+        console.print("\n[green]✅ Append completed successfully![/green]")
+
+    except click.UsageError:
+        raise
+    except FlutterSetupError as e:
+        console.print(f"[red]❌ Append failed: {e}[/red]")
+        if verbose:
+            console.print_exception()
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⚠️  Append interrupted by user[/yellow]")
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]❌ Unexpected error: {e}[/red]")

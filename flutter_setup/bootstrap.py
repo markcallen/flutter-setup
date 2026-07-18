@@ -1,5 +1,6 @@
 """Project bootstrapping for Flutter setup."""
 
+import re as _re
 import subprocess
 from pathlib import Path
 
@@ -12,12 +13,49 @@ from .config import Config
 console = Console()
 
 
+def _extract_makefile_target_names(content: str) -> set[str]:
+    """Return set of target names defined in a Makefile."""
+    # Match 'name:' but NOT 'name:=' (variable assignment)
+    names = set(
+        _re.findall(
+            r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", content, _re.MULTILINE
+        )
+    )
+    names.discard(".PHONY")
+    return names
+
+
+def _filter_new_makefile_content(new_content: str, existing_targets: set[str]) -> str:
+    """Return only the target blocks from new_content whose names are not in existing_targets.
+
+    Non-target preamble blocks (variable assignments, etc.) are excluded because
+    they are assumed to already exist in the Makefile being appended to.
+    """
+    # Split new_content into blocks: each block starts at a target line
+    blocks = _re.split(
+        r"(?=^[a-zA-Z][a-zA-Z0-9_-]*\s*:(?!=))", new_content, flags=_re.MULTILINE
+    )
+    result = []
+    for block in blocks:
+        if not block.strip():
+            continue
+        first_line = block.splitlines()[0] if block.splitlines() else ""
+        target_match = _re.match(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", first_line)
+        if target_match:
+            target_name = target_match.group(1)
+            if target_name not in existing_targets:
+                result.append(block)
+        # Non-target blocks (preamble variable assignments) are skipped entirely
+    return "".join(result)
+
+
 class ProjectBootstrap:
     """Bootstraps development environment for Flutter projects."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, force: bool = False):
         """Initialize ProjectBootstrap."""
         self.config = config
+        self.force = force
         self.home = Path.home()
         self.flutter_root = config.flutter_location
 
@@ -122,10 +160,8 @@ class ProjectBootstrap:
             pass
         return None
 
-    def _create_makefile(self) -> None:
-        """Create Makefile with common commands."""
-        # Always lock the project to the Flutter version present at creation time.
-        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+    def _build_makefile_content(self) -> str:
+        """Build and return the Makefile content string."""
         ver = self.config.flutter_version or self._detect_flutter_version()
         flutter_home = str(self.config.flutter_location)
 
@@ -184,7 +220,7 @@ check-android-sdk:
 .PHONY: check-android-sdk
 """
 
-        makefile_content = f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
+        return f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
 \t{flutter_cmd} run -d ios
 
 run-android:{version_dep}{android_sdk_dep}
@@ -206,10 +242,91 @@ upgrade-check:{version_dep}
 \t{flutter_cmd} pub get
 {generate_target}{android_sdk_target}{version_target}"""
 
+    def _create_makefile(self) -> None:
+        """Create Makefile with common commands."""
+        # Always lock the project to the Flutter version present at creation time.
+        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+        makefile_content = self._build_makefile_content()
+
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
 
         console.print("  ✅ Makefile created")
+
+    def _append_vscode_config(self) -> None:
+        """Append VS Code/Cursor configuration files, skipping existing unless --force."""
+        import json
+
+        vscode_dir = self.config.project_path / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+
+        settings = {
+            "dart.flutterHotReloadOnSave": "all",
+            "dart.lineLength": 100,
+            "editor.formatOnSave": True,
+            "editor.defaultFormatter": "Dart-Code.dart-code",
+            "files.exclude": {"**/.dart_tool": True, "**/build": True},
+        }
+        settings_file = vscode_dir / "settings.json"
+        if settings_file.exists() and not self.force:
+            console.print(
+                "  ⚠️  .vscode/settings.json already exists — skipping (use --force to overwrite)"
+            )
+        else:
+            settings_file.write_text(json.dumps(settings, indent=2))
+            console.print("  ✅ .vscode/settings.json written")
+
+        launch_config = {
+            "version": "0.2.0",
+            "configurations": [
+                {"name": "Flutter Debug", "request": "launch", "type": "dart"}
+            ],
+        }
+        launch_file = vscode_dir / "launch.json"
+        if launch_file.exists() and not self.force:
+            console.print(
+                "  ⚠️  .vscode/launch.json already exists — skipping (use --force to overwrite)"
+            )
+        else:
+            launch_file.write_text(json.dumps(launch_config, indent=2))
+            console.print("  ✅ .vscode/launch.json written")
+
+    def _append_makefile(self) -> None:
+        """Append missing Makefile targets, or create Makefile if absent."""
+        new_content = self._build_makefile_content()
+        makefile = self.config.project_path / "Makefile"
+
+        if not makefile.exists():
+            makefile.write_text(new_content)
+            console.print("  ✅ Makefile created")
+            return
+
+        existing = makefile.read_text()
+        existing_targets = _extract_makefile_target_names(existing)
+        to_append = _filter_new_makefile_content(new_content, existing_targets)
+
+        if to_append:
+            with open(makefile, "a") as f:
+                f.write("\n# Added by flutter-setup\n")
+                f.write(to_append)
+            console.print("  ✅ Makefile targets appended")
+        else:
+            console.print(
+                "  ℹ️  Makefile already has all flutter-setup targets — nothing to append"
+            )
+
+    def append_project(self) -> None:
+        """Append flutter-setup tooling to an existing project directory."""
+        if self.config.dry_run:
+            console.print(
+                "[yellow]DRY RUN: Would append flutter-setup tooling[/yellow]"
+            )
+            return
+        console.print("  🔧 Appending flutter-setup tooling...")
+        self._append_vscode_config()
+        self._append_makefile()
+        self._create_cicd()
+        console.print("  ✅ Tooling appended")
 
     def _patch_android_ndk_version(self) -> None:
         """Pin the Android NDK version in build.gradle.kts.
@@ -582,7 +699,7 @@ class FirebaseNotificationsService {
 
     def _create_cicd(self) -> None:
         """Create CI/CD workflows and configuration."""
-        cicd_generator = CicdGenerator(self.config)
+        cicd_generator = CicdGenerator(self.config, force=self.force)
         cicd_generator.generate_cicd()
 
     def _add_dependencies(self) -> None:
