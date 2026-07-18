@@ -439,3 +439,264 @@ class TestCLI:
                 mock_setup.run.side_effect = KeyboardInterrupt()
                 result = runner.invoke(cli, ["setup", "TestApp", "ios"])
                 assert result.exit_code == 1
+
+
+class TestAppendCommand:
+    """Tests for the append CLI command."""
+
+    def _base_config(self) -> dict:  # type: ignore[type-arg]
+        return {
+            "flutter": {"location": "/flutter", "channel": "stable"},
+            "project": {},
+        }
+
+    def test_append_existing_flutter_project(self, tmp_path: Path) -> None:
+        """append on an existing Flutter project calls bootstrap.append_project()."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="myapp"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms",
+                        return_value=["ios", "android"],
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 0
+                            mock_bs.append_project.assert_called_once()
+
+    def test_append_existing_flutter_project_no_pubspec_name(
+        self, tmp_path: Path
+    ) -> None:
+        """Falls back to directory name when pubspec has no name field."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value=None):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms",
+                        return_value=["ios"],
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 0
+                            config = mock_bs_class.call_args.args[0]
+                            assert config.project_name == tmp_path.name
+
+    def test_append_existing_flutter_project_with_force(self, tmp_path: Path) -> None:
+        """--force is forwarded to ProjectBootstrap."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["web"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            result = runner.invoke(
+                                cli,
+                                ["append", "--dir", str(tmp_path), "--force"],
+                            )
+                            assert result.exit_code == 0
+                            assert mock_bs_class.call_args.kwargs["force"] is True
+
+    def test_append_non_flutter_with_project_name(self, tmp_path: Path) -> None:
+        """Non-Flutter directory with project_name argument runs full FlutterSetup."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=False):
+                with patch("flutter_setup.cli._is_interactive", return_value=False):
+                    with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                        mock_setup = Mock()
+                        mock_setup_class.return_value = mock_setup
+                        result = runner.invoke(
+                            cli,
+                            ["append", "myapp", "--dir", str(tmp_path)],
+                        )
+                        assert result.exit_code == 0
+                        mock_setup.run.assert_called_once()
+
+    def test_append_non_flutter_without_project_name_raises_usage_error(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-Flutter directory without project_name raises UsageError."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=False):
+                result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                assert result.exit_code != 0
+
+    def test_append_non_flutter_interactive_prompts_platforms(
+        self, tmp_path: Path
+    ) -> None:
+        """In interactive mode, platforms are prompted."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=False):
+                with patch("flutter_setup.cli._is_interactive", return_value=True):
+                    with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                        mock_setup = Mock()
+                        mock_setup_class.return_value = mock_setup
+                        result = runner.invoke(
+                            cli,
+                            ["append", "myapp", "--dir", str(tmp_path)],
+                            input="ios android\n",
+                        )
+                        assert result.exit_code == 0
+                        config = mock_setup_class.call_args.args[0]
+                        assert config.platforms == ["ios", "android"]
+
+    def test_append_non_flutter_non_interactive_uses_default_platforms(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-interactive mode uses default platforms without prompting."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=False):
+                with patch("flutter_setup.cli._is_interactive", return_value=False):
+                    with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                        mock_setup = Mock()
+                        mock_setup_class.return_value = mock_setup
+                        result = runner.invoke(
+                            cli,
+                            ["append", "myapp", "--dir", str(tmp_path)],
+                        )
+                        assert result.exit_code == 0
+                        config = mock_setup_class.call_args.args[0]
+                        assert config.platforms == ["ios", "android", "web"]
+
+    def test_append_flutter_setup_error(self, tmp_path: Path) -> None:
+        """FlutterSetupError exits with code 1."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            mock_bs.append_project.side_effect = FlutterSetupError(
+                                "boom"
+                            )
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 1
+
+    def test_append_keyboard_interrupt(self, tmp_path: Path) -> None:
+        """KeyboardInterrupt exits with code 1."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            mock_bs.append_project.side_effect = KeyboardInterrupt()
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 1
+
+    def test_append_unexpected_exception(self, tmp_path: Path) -> None:
+        """Unexpected exceptions exit with code 1."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            mock_bs.append_project.side_effect = RuntimeError("oops")
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 1
+
+    def test_append_dry_run(self, tmp_path: Path) -> None:
+        """--dry-run is forwarded to Config."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            result = runner.invoke(
+                                cli,
+                                ["append", "--dir", str(tmp_path), "--dry-run"],
+                            )
+                            assert result.exit_code == 0
+                            config = mock_bs_class.call_args.args[0]
+                            assert config.dry_run is True
+
+    def test_append_no_flutter_location_in_config(self, tmp_path: Path) -> None:
+        """Falls back to default flutter location when not set in config."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = {
+                "flutter": {},
+                "project": {},
+            }
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
+                    with patch(
+                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
+                    ):
+                        with patch(
+                            "flutter_setup.cli.ProjectBootstrap"
+                        ) as mock_bs_class:
+                            mock_bs = Mock()
+                            mock_bs_class.return_value = mock_bs
+                            result = runner.invoke(
+                                cli, ["append", "--dir", str(tmp_path)]
+                            )
+                            assert result.exit_code == 0
+                            config = mock_bs_class.call_args.args[0]
+                            assert "flutter" in str(config.flutter_location)
