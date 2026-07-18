@@ -113,7 +113,7 @@ class TestCicdGenerator:
             assert test_file.exists()
             content = test_file.read_text()
             assert "name: Test" in content
-            assert "flutter test" in content
+            assert "flutter test --coverage" in content
 
     def test_codecov_token_uses_double_brace_syntax(self, config: Config) -> None:
         """Test that the Codecov token uses correct ${{ }} expression syntax."""

@@ -244,7 +244,7 @@ jobs:
         run: flutter pub get
 
       - name: Run unit tests
-        run: flutter test
+        run: flutter test --coverage
 
       - name: Upload coverage
         if: github.event_name == 'pull_request'
