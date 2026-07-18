@@ -312,12 +312,19 @@ void main() {{
             f.write(widget_test)
 
         # Integration test
-        integration_test = f"""import 'package:integration_test/integration_test.dart';
+        integration_test = f"""import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
 {riverpod_import}import '{app_import}';
 
 void main() {{
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {{
+    try {{
+      await dotenv.load(fileName: '.env');
+    }} catch (_) {{}}
+  }});
 
   testWidgets('home page renders', (tester) async {{
     await tester.pumpWidget({pump_widget});

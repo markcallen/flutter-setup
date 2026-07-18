@@ -175,6 +175,22 @@ class TestProjectBootstrap:
             ).exists()
             assert (config.project_path / "integration_test" / "app_test.dart").exists()
 
+    def test_integration_test_initializes_dotenv(self, config: Config) -> None:
+        """Test that the generated integration test calls dotenv.load() in setUpAll."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            content = (
+                config.project_path / "integration_test" / "app_test.dart"
+            ).read_text()
+            assert "flutter_dotenv" in content
+            assert "setUpAll" in content
+            assert "dotenv.load" in content
+
     def test_create_analysis_options(self, config: Config) -> None:
         """Test creating analysis options file."""
         with tempfile.TemporaryDirectory() as tmpdir:
