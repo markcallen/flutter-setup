@@ -115,6 +115,22 @@ class TestCicdGenerator:
             assert "name: Test" in content
             assert "flutter test" in content
 
+    def test_workflows_use_correct_actions_versions(self, config: Config) -> None:
+        """Test that generated workflows use valid GitHub Actions versions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+
+            workflows_dir = config.project_path / ".github" / "workflows"
+            for workflow_file in workflows_dir.glob("*.yml"):
+                content = workflow_file.read_text()
+                assert "actions/checkout@v6" not in content, workflow_file.name
+                assert "actions/upload-artifact@v5" not in content, workflow_file.name
+                assert "actions/github-script@v8" not in content, workflow_file.name
+                assert "actions/checkout@v4" in content or "checkout" not in content
+
     def test_generate_build_workflows_ios(self, config: Config) -> None:
         """Test generating iOS build workflow."""
         with tempfile.TemporaryDirectory() as tmpdir:
