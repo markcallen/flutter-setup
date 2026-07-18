@@ -328,6 +328,20 @@ class TestProjectBootstrap:
             bootstrap = ProjectBootstrap(config)
             bootstrap._modify_main_dart()  # Should not raise
 
+    def test_sqlite_scaffold_includes_migration_strategy(self, config: Config) -> None:
+        """Test that the generated AppDatabase includes a MigrationStrategy."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            data_dir = config.project_path / "lib" / "src" / "core" / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_sqlite_scaffold()
+            content = (data_dir / "app_database.dart").read_text()
+            assert "MigrationStrategy" in content
+            assert "onCreate" in content
+            assert "onUpgrade" in content
+
     def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
         """Test that drift_dev is written directly to pubspec.yaml for sqlite projects."""
         with tempfile.TemporaryDirectory() as tmpdir:
