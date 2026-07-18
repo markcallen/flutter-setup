@@ -848,9 +848,7 @@ def append_command(
                     "Platforms (space-separated)",
                     default="ios android",
                 )
-                platforms_list = [
-                    p.strip() for p in platforms_str.split() if p.strip()
-                ]
+                platforms_list = [p.strip() for p in platforms_str.split() if p.strip()]
 
             config = Config(
                 project_name=project_name,

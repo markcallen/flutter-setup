@@ -17,9 +17,7 @@ def _extract_makefile_target_names(content: str) -> set[str]:
     """Return set of target names defined in a Makefile."""
     # Match 'name:' but NOT 'name:=' (variable assignment)
     names = set(
-        _re.findall(
-            r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", content, _re.MULTILINE
-        )
+        _re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", content, _re.MULTILINE)
     )
     names.discard(".PHONY")
     return names

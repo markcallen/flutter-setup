@@ -2,12 +2,13 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-import yaml
-
-from flutter_setup.appender import detect_flutter_project, detect_platforms, get_pubspec_name
+from flutter_setup.appender import (
+    detect_flutter_project,
+    detect_platforms,
+    get_pubspec_name,
+)
 from flutter_setup.bootstrap import (
     ProjectBootstrap,
     _extract_makefile_target_names,
@@ -15,10 +16,10 @@ from flutter_setup.bootstrap import (
 )
 from flutter_setup.config import Config
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_config(tmp_path: Path, project_name: str = "myapp") -> Config:
     """Return a minimal Config rooted at tmp_path."""
@@ -49,7 +50,9 @@ class TestDetectFlutterProject:
         pubspec.write_text("name: myapp\nflutter:\n  uses-material-design: true\n")
         assert detect_flutter_project(tmp_path) is True
 
-    def test_returns_false_when_pubspec_missing_flutter_key(self, tmp_path: Path) -> None:
+    def test_returns_false_when_pubspec_missing_flutter_key(
+        self, tmp_path: Path
+    ) -> None:
         pubspec = tmp_path / "pubspec.yaml"
         pubspec.write_text("name: myapp\ndependencies:\n  yaml: ^3.0.0\n")
         assert detect_flutter_project(tmp_path) is False
@@ -151,7 +154,9 @@ class TestExtractMakefileTargetNames:
         assert "test" in result
 
     def test_extracts_hyphenated_targets(self) -> None:
-        content = "run-ios:\n\tflutter run -d ios\n\nrun-android:\n\tflutter run -d android\n"
+        content = (
+            "run-ios:\n\tflutter run -d ios\n\nrun-android:\n\tflutter run -d android\n"
+        )
         result = _extract_makefile_target_names(content)
         assert "run-ios" in result
         assert "run-android" in result
@@ -229,7 +234,9 @@ class TestAppendProject:
                     mock_makefile.assert_called_once()
                     mock_cicd.assert_called_once()
 
-    def test_append_vscode_config_skips_existing_without_force(self, tmp_path: Path) -> None:
+    def test_append_vscode_config_skips_existing_without_force(
+        self, tmp_path: Path
+    ) -> None:
         config = _make_config(tmp_path)
         project_dir = tmp_path / "myapp"
         project_dir.mkdir()
@@ -243,8 +250,12 @@ class TestAppendProject:
         bootstrap._append_vscode_config()
 
         # Files should be unchanged
-        assert json.loads((vscode_dir / "settings.json").read_text()) == {"existing": True}
-        assert json.loads((vscode_dir / "launch.json").read_text()) == {"existing": True}
+        assert json.loads((vscode_dir / "settings.json").read_text()) == {
+            "existing": True
+        }
+        assert json.loads((vscode_dir / "launch.json").read_text()) == {
+            "existing": True
+        }
 
     def test_append_vscode_config_overwrites_with_force(self, tmp_path: Path) -> None:
         config = _make_config(tmp_path)
