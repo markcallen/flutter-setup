@@ -250,7 +250,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{{{ secrets.CODECOV_TOKEN }}}}
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 """

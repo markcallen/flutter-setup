@@ -115,6 +115,19 @@ class TestCicdGenerator:
             assert "name: Test" in content
             assert "flutter test" in content
 
+    def test_codecov_token_uses_double_brace_syntax(self, config: Config) -> None:
+        """Test that the Codecov token uses correct ${{ }} expression syntax."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_test_workflow(workflows_dir)
+            content = (workflows_dir / "test.yml").read_text()
+            assert "${{ secrets.CODECOV_TOKEN }}" in content
+            assert "${ secrets.CODECOV_TOKEN }" not in content
+
     def test_workflows_use_correct_actions_versions(self, config: Config) -> None:
         """Test that generated workflows use valid GitHub Actions versions."""
         with tempfile.TemporaryDirectory() as tmpdir:
