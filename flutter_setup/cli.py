@@ -802,6 +802,16 @@ def append_command(
         else:
             flutter_location = Path.home() / "development" / "flutter"
 
+        file_flutter = file_config.get("flutter", {})
+        file_project = file_config.get("project", {})
+
+        # Prefer values from the config file over Click defaults when the user
+        # did not explicitly pass the option on the command line.
+        if org == "com.example" and file_project.get("org"):
+            org = file_project["org"]
+        if channel == "stable" and file_flutter.get("channel"):
+            channel = cast(FlutterChannel, file_flutter["channel"])
+
         target_path = Path(target_dir).resolve()
         is_flutter = detect_flutter_project(target_path)
 
