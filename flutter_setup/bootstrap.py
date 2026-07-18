@@ -619,6 +619,11 @@ class FirebaseNotificationsService {
             # flutter pub add doesn't correctly handle SDK dependencies
             self._add_integration_test_sdk_dependency()
 
+            # Ensure drift_dev is in pubspec.yaml for sqlite projects even if
+            # flutter pub add failed silently in restricted environments
+            if self.config.database == "sqlite":
+                self._add_drift_dev_to_pubspec()
+
             console.print("  ✅ Dependencies added")
 
         except Exception as e:
@@ -719,6 +724,26 @@ class FirebaseNotificationsService {
 
         except Exception as e:
             console.print(f"  ⚠️  Failed to add integration_test SDK dependency: {e}")
+
+    def _add_drift_dev_to_pubspec(self) -> None:
+        """Write drift_dev directly to pubspec.yaml dev_dependencies for sqlite projects.
+
+        flutter pub add can silently fail in some environments; this guarantees
+        the entry is present regardless.
+        """
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            dev_deps = pubspec.setdefault("dev_dependencies", {})
+            if "drift_dev" not in dev_deps:
+                dev_deps["drift_dev"] = "any"
+                with open(pubspec_path, "w") as f:
+                    yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add drift_dev to pubspec.yaml: {e}")
 
     def _create_environment_support(self) -> None:
         """Create environment variable support."""

@@ -279,6 +279,38 @@ class TestProjectBootstrap:
             bootstrap = ProjectBootstrap(config)
             bootstrap._modify_main_dart()  # Should not raise
 
+    def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
+        """Test that drift_dev is written directly to pubspec.yaml for sqlite projects."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndev_dependencies:\n  build_runner: ^2.9.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert "drift_dev" in content["dev_dependencies"]
+
+    def test_add_drift_dev_to_pubspec_skips_if_already_present(
+        self, config: Config
+    ) -> None:
+        """Test that drift_dev is not duplicated if already in pubspec.yaml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndev_dependencies:\n  drift_dev: ^2.0.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["dev_dependencies"]["drift_dev"] == "^2.0.0"
+
     def test_create_readme(self, config: Config) -> None:
         """Test creating README file."""
         with tempfile.TemporaryDirectory() as tmpdir:
