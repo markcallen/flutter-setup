@@ -111,6 +111,13 @@ class TestProjectBootstrap:
             assert "FLUTTER_REQUIRED_VERSION" in content
             # python3 comparison must be present in the target body
             assert "python3" in content
+            # pub get must NOT be inside check-flutter-version; it runs in bootstrap
+            check_target_start = content.index("check-flutter-version:")
+            phony_end = content.index(
+                ".PHONY: check-flutter-version", check_target_start
+            )
+            check_target_body = content[check_target_start:phony_end]
+            assert "pub get" not in check_target_body
 
     def test_patch_android_ndk_version(self, config: Config) -> None:
         """Test that build.gradle.kts is patched to pin the NDK version."""
@@ -414,6 +421,24 @@ class TestProjectBootstrap:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = Exception("Failed")
             bootstrap._format_code()  # Should not raise, just warn
+
+    def test_run_pub_get(self, bootstrap: ProjectBootstrap, config: Config) -> None:
+        """Test that _run_pub_get calls flutter pub get in the project directory."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            bootstrap._run_pub_get()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert args[-2:] == ["pub", "get"]
+            assert mock_run.call_args[1]["cwd"] == config.project_path
+
+    def test_run_pub_get_failure(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_pub_get handles errors gracefully."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Failed")
+            bootstrap._run_pub_get()  # Should not raise, just warn
 
     def test_add_integration_test_sdk_dependency_no_pubspec(
         self, bootstrap: ProjectBootstrap, config: Config

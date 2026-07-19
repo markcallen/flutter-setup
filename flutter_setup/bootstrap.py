@@ -64,6 +64,11 @@ class ProjectBootstrap:
         if ver:
             self._pin_flutter_sdk_version(ver)
 
+        # Re-run pub get after all pubspec.yaml modifications are complete so
+        # packages added by yaml.dump-based edits (integration_test, .env asset,
+        # flutter version pin) are resolved before the user's first make target.
+        self._run_pub_get()
+
         # Create README
         self._create_readme()
 
@@ -145,7 +150,6 @@ check-flutter-version:
 \techo "  Detected Flutter $$ACTUAL (required: >=$(FLUTTER_REQUIRED_VERSION))"; \\
 \tpython3 -c "import sys; a=tuple(map(int,'$$ACTUAL'.split('.'))); r=tuple(map(int,'$(FLUTTER_REQUIRED_VERSION)'.split('.'))); sys.exit(0 if a>=r else 1)" 2>/dev/null || \\
 \t{ echo "ERROR: Flutter $$ACTUAL does not satisfy >=$$FLUTTER_REQUIRED_VERSION"; exit 1; }
-\t@$(FLUTTER) pub get
 
 .PHONY: check-flutter-version
 """
@@ -978,6 +982,19 @@ project before using the generated Firebase services.
             f.write(readme_content)
 
         console.print("  ✅ README created")
+
+    def _run_pub_get(self) -> None:
+        """Run flutter pub get after all pubspec.yaml modifications are complete."""
+        try:
+            subprocess.run(
+                [str(self.flutter_root / "bin" / "flutter"), "pub", "get"],
+                cwd=self.config.project_path,
+                check=False,
+                capture_output=True,
+            )
+            console.print("  ✅ flutter pub get completed")
+        except Exception as e:
+            console.print(f"  ⚠️  flutter pub get warning: {e}")
 
     def _format_code(self) -> None:
         """Format the generated code."""
