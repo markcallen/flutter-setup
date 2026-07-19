@@ -114,13 +114,18 @@ class ProjectBootstrap:
         # Add dependencies
         self._add_dependencies()
 
-        # Create environment support
+        # Create environment support (.env file + gitignore entry; NOT added to assets)
         self._create_environment_support()
 
         # Pin Flutter SDK version in pubspec.yaml
         ver = self.config.flutter_version or self._detect_flutter_version()
         if ver:
             self._pin_flutter_sdk_version(ver)
+
+        # Re-run pub get after all pubspec.yaml modifications are complete so
+        # packages added by yaml.dump-based edits (integration_test, .env asset,
+        # flutter version pin) are resolved before the user's first make target.
+        self._run_pub_get()
 
         # Create README
         self._create_readme()
@@ -192,11 +197,15 @@ class ProjectBootstrap:
                 f"FLUTTER_REQUIRED_VERSION := {ver}\n\n"
             )
             version_dep = " check-flutter-version"
-            # Use flutter pub get to enforce the pubspec.yaml >=constraint natively
             version_target = """
 check-flutter-version:
-\t@echo "Checking Flutter SDK satisfies >=$(FLUTTER_REQUIRED_VERSION) (pubspec.yaml)..."
-\t@$(FLUTTER) pub get
+\t@ACTUAL=$$($(FLUTTER) --version 2>&1 | awk '/^Flutter [0-9]/{print $$2; exit}'); \\
+\tif [ -z "$$ACTUAL" ]; then \\
+\t\techo "ERROR: Could not determine Flutter version at $(FLUTTER_HOME)"; exit 1; \\
+\tfi; \\
+\techo "  Detected Flutter $$ACTUAL (required: >=$(FLUTTER_REQUIRED_VERSION))"; \\
+\tawk -v a="$$ACTUAL" -v r="$(FLUTTER_REQUIRED_VERSION)" 'BEGIN{split(a,av,".");split(r,rv,".");for(i=1;i<=3;i++){sub(/[^0-9].*/,"",av[i]);sub(/[^0-9].*/,"",rv[i])};if(av[1]+0>rv[1]+0)exit 0;if(av[1]+0<rv[1]+0)exit 1;if(av[2]+0>rv[2]+0)exit 0;if(av[2]+0<rv[2]+0)exit 1;if(av[3]+0>=rv[3]+0)exit 0;exit 1}' /dev/null || \\
+\t{ echo "ERROR: Flutter $$ACTUAL does not satisfy >=$$FLUTTER_REQUIRED_VERSION"; exit 1; }
 
 .PHONY: check-flutter-version
 """
@@ -208,11 +217,13 @@ check-flutter-version:
         flutter_cmd = "$(FLUTTER)" if ver else "flutter"
 
         generate_target = ""
+        codegen_dep = ""
         if self.config.database == "sqlite":
             generate_target = f"""
 generate:{version_dep}
 \tdart run build_runner build --delete-conflicting-outputs
 """
+            codegen_dep = " generate"
 
         web_target = ""
         if "web" in self.config.platforms:
@@ -246,13 +257,13 @@ check-android-sdk:
 run-android:{version_dep}{android_sdk_dep}
 \t{flutter_cmd} run -d android
 
-analyze:{version_dep}
+analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
 
-test:{version_dep}
+test:{version_dep}{codegen_dep}
 \t{flutter_cmd} test
 
-integration:{version_dep}
+integration:{version_dep}{codegen_dep}
 \t{flutter_cmd} test integration_test
 
 upgrade:{version_dep}
@@ -430,13 +441,19 @@ void main() {
             pump_widget = f"const ProviderScope(child: {app_widget}())"
 
         # Widget test
+        if self.config.architecture == "clean":
+            widget_assertion = "expect(find.text('Home'), findsOneWidget);"
+        else:
+            widget_assertion = f"expect(find.byType({app_widget}), findsOneWidget);"
+
         widget_test = f"""import 'package:flutter_test/flutter_test.dart';
 {riverpod_import}import '{app_import}';
 
 void main() {{
   testWidgets('App loads without errors', (tester) async {{
     await tester.pumpWidget({pump_widget});
-    expect(find.byType({app_widget}), findsOneWidget);
+    await tester.pumpAndSettle();
+    {widget_assertion}
   }});
 }}
 """
@@ -447,16 +464,29 @@ void main() {{
             f.write(widget_test)
 
         # Integration test
-        integration_test = f"""import 'package:integration_test/integration_test.dart';
+        if self.config.architecture == "clean":
+            integration_assertion = "expect(find.text('Home'), findsOneWidget);"
+        else:
+            integration_assertion = (
+                f"expect(find.byType({app_widget}), findsOneWidget);"
+            )
+
+        integration_test = f"""import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
 {riverpod_import}import '{app_import}';
 
 void main() {{
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() async {{
+    await dotenv.load(fileName: '.env', isOptional: true);
+  }});
+
   testWidgets('home page renders', (tester) async {{
     await tester.pumpWidget({pump_widget});
-    expect(find.byType({app_widget}), findsOneWidget);
+    await tester.pumpAndSettle();
+    {integration_assertion}
   }});
 }}
 """
@@ -522,15 +552,14 @@ linter:
 
         (src_dir / "app" / "app.dart").write_text(
             """import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/home/presentation/home_screen.dart';
 
-class App extends ConsumerWidget {
+class App extends StatelessWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter App',
       theme: ThemeData(useMaterial3: true),
@@ -545,13 +574,12 @@ class App extends ConsumerWidget {
             src_dir / "features" / "home" / "presentation" / "home_screen.dart"
         ).write_text(
             """import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
         child: Text('Home'),
@@ -588,7 +616,7 @@ import 'src/app/app.dart';
 
 Future<void> main() async {{
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  await dotenv.load(fileName: '.env', isOptional: true);
 {firebase_init}\
   runApp(const ProviderScope(child: App()));
 }}
@@ -625,6 +653,14 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   int get schemaVersion => 1;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      throw UnimplementedError('Add migration steps for v$from -> v$to');
+    },
+  );
 }
 
 LazyDatabase _openConnection() {
@@ -759,6 +795,11 @@ class FirebaseNotificationsService {
             # flutter pub add doesn't correctly handle SDK dependencies
             self._add_integration_test_sdk_dependency()
 
+            # Ensure drift_dev is in pubspec.yaml for sqlite projects even if
+            # flutter pub add failed silently in restricted environments
+            if self.config.database == "sqlite":
+                self._add_drift_dev_to_pubspec()
+
             console.print("  ✅ Dependencies added")
 
         except Exception as e:
@@ -860,23 +901,81 @@ class FirebaseNotificationsService {
         except Exception as e:
             console.print(f"  ⚠️  Failed to add integration_test SDK dependency: {e}")
 
+    def _add_drift_dev_to_pubspec(self) -> None:
+        """Write drift_dev directly to pubspec.yaml dev_dependencies for sqlite projects.
+
+        flutter pub add can silently fail in some environments; this guarantees
+        the entry is present regardless. The version constraint is derived from
+        the runtime drift package so the code-generator major version always matches.
+        """
+        import re
+
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            dev_deps = pubspec.setdefault("dev_dependencies", {})
+            if "drift_dev" not in dev_deps:
+                # Pin drift_dev to the same major version as the runtime drift
+                # package: a major-version mismatch causes incompatible codegen.
+                drift_constraint = pubspec.get("dependencies", {}).get("drift", "")
+                match = re.match(r"[\^~]?(\d+)", str(drift_constraint))
+                version = f"^{match.group(1)}.0.0" if match else "any"
+                dev_deps["drift_dev"] = version
+                with open(pubspec_path, "w") as f:
+                    yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add drift_dev to pubspec.yaml: {e}")
+
     def _create_environment_support(self) -> None:
         """Create environment variable support."""
-        # Create .env file
-        env_content = """# Example environment variables
+        env_example_content = """# Environment variables — copy to .env and fill in real values.
+# .env is gitignored; .env.example is checked in as a reference.
+API_URL=https://api.example.com
+"""
+        env_content = """# Local environment variables (gitignored — never commit real secrets).
 API_URL=https://api.example.com
 """
 
-        with open(self.config.project_path / ".env", "w") as f:
-            f.write(env_content)
+        env_example = self.config.project_path / ".env.example"
+        if not env_example.exists():
+            env_example.write_text(env_example_content)
 
-        # Declare .env as a Flutter asset so it gets bundled into the app
-        self._add_env_asset_to_pubspec()
+        env_file = self.config.project_path / ".env"
+        if not env_file.exists():
+            env_file.write_text(env_content)
+
+        # Keep .env out of version control
+        self._add_env_to_gitignore()
+
+        # .env is intentionally NOT added to pubspec.yaml assets: bundling it
+        # would hard-fail CI builds on a clean checkout (file is gitignored).
+        # Add it manually and remove from .gitignore when you need runtime env vars,
+        # or use --dart-define-from-file for build-time injection.
 
         # Modify main.dart to load .env
         self._modify_main_dart()
 
         console.print("  ✅ Environment support created")
+
+    def _add_env_to_gitignore(self) -> None:
+        """Ensure .env is listed in .gitignore."""
+        gitignore_path = self.config.project_path / ".gitignore"
+        entry = ".env\n"
+        if gitignore_path.exists():
+            content = gitignore_path.read_text()
+            lines = content.splitlines()
+            if any(line.strip() == ".env" for line in lines):
+                return
+            with open(gitignore_path, "a") as f:
+                if content and not content.endswith("\n"):
+                    f.write("\n")
+                f.write("\n# Environment variables\n")
+                f.write(entry)
+        else:
+            gitignore_path.write_text(f"# Environment variables\n{entry}")
 
     def _add_env_asset_to_pubspec(self) -> None:
         """Add .env to the flutter assets list in pubspec.yaml."""
@@ -930,7 +1029,7 @@ API_URL=https://api.example.com
                 modified_content = "\n".join(lines)
                 modified_content = modified_content.replace(
                     "void main() {",
-                    'Future<void> main() async {\n  await dotenv.load(fileName: ".env");',
+                    'Future<void> main() async {\n  await dotenv.load(fileName: ".env", isOptional: true);',
                 )
 
                 with open(main_dart, "w") as f:
@@ -956,8 +1055,8 @@ API_URL=https://api.example.com
                     modified_content = "\n".join(lines)
                     if "await dotenv.load" in modified_content:
                         modified_content = modified_content.replace(
-                            '  await dotenv.load(fileName: ".env");',
-                            '  await dotenv.load(fileName: ".env");\n'
+                            '  await dotenv.load(fileName: ".env", isOptional: true);',
+                            '  await dotenv.load(fileName: ".env", isOptional: true);\n'
                             "  await initializeFirebase();",
                         )
                     elif "Future<void> main() async {" in modified_content:
@@ -1003,7 +1102,10 @@ make analyze
 ```
 
 ### Env vars
-Edit `.env` and access with `dotenv.env['KEY']` after startup.
+Copy `.env.example` to `.env` and fill in values. The file is gitignored and
+not bundled as an asset by default, so `dotenv.env['KEY']` returns null until
+you either add `.env` to `pubspec.yaml` assets (and remove it from `.gitignore`),
+or use `--dart-define-from-file=.env.json` for build-time injection.
 
 ### Scaffold configuration
 - Architecture: `{self.config.architecture}`
@@ -1047,6 +1149,19 @@ Edit `.env` and access with `dotenv.env['KEY']` after startup.
                 with open(readme_path, "a") as f:
                     f.write("\n" + section)
                 console.print("  ✅ flutter-setup section appended to README.md")
+
+    def _run_pub_get(self) -> None:
+        """Run flutter pub get after all pubspec.yaml modifications are complete."""
+        try:
+            subprocess.run(
+                [str(self.flutter_root / "bin" / "flutter"), "pub", "get"],
+                cwd=self.config.project_path,
+                check=False,
+                capture_output=True,
+            )
+            console.print("  ✅ flutter pub get completed")
+        except Exception as e:
+            console.print(f"  ⚠️  flutter pub get warning: {e}")
 
     def _format_code(self) -> None:
         """Format the generated code."""

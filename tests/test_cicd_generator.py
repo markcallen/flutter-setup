@@ -113,7 +113,36 @@ class TestCicdGenerator:
             assert test_file.exists()
             content = test_file.read_text()
             assert "name: Test" in content
-            assert "flutter test" in content
+            assert "flutter test --coverage" in content
+
+    def test_codecov_token_uses_double_brace_syntax(self, config: Config) -> None:
+        """Test that the Codecov token uses correct ${{ }} expression syntax."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_test_workflow(workflows_dir)
+            content = (workflows_dir / "test.yml").read_text()
+            assert "${{ secrets.CODECOV_TOKEN }}" in content
+            assert "${ secrets.CODECOV_TOKEN }" not in content
+
+    def test_workflows_use_correct_actions_versions(self, config: Config) -> None:
+        """Test that generated workflows use valid GitHub Actions versions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+
+            workflows_dir = config.project_path / ".github" / "workflows"
+            for workflow_file in workflows_dir.glob("*.yml"):
+                content = workflow_file.read_text()
+                assert "actions/checkout@v6" not in content, workflow_file.name
+                assert "actions/upload-artifact@v5" not in content, workflow_file.name
+                assert "actions/github-script@v8" not in content, workflow_file.name
+                assert "actions/checkout@v4" in content or "checkout" not in content
 
     def test_generate_build_workflows_ios(self, config: Config) -> None:
         """Test generating iOS build workflow."""
@@ -325,6 +354,156 @@ class TestCicdGenerator:
 
             # Check documentation exists
             assert (github_dir / "CI_CD_SETUP.md").exists()
+
+    def test_codegen_step_absent_without_sqlite(self, config: Config) -> None:
+        """Test that no code generation step is added when database is not sqlite."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+
+            workflows_dir = config.project_path / ".github" / "workflows"
+            for wf in workflows_dir.glob("*.yml"):
+                content = wf.read_text()
+                assert "build_runner" not in content, wf.name
+
+    def test_codegen_step_present_in_lint_workflow_for_sqlite(self) -> None:
+        """Test that code generation step is added to lint workflow for sqlite projects."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["android"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("/tmp"),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path("/flutter"),
+            database="sqlite",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_lint_workflow(workflows_dir)
+            content = (workflows_dir / "lint.yml").read_text()
+            assert "build_runner" in content
+            assert "Generate code" in content
+
+    def test_codegen_step_present_in_test_workflow_for_sqlite(self) -> None:
+        """Test that code generation step is added to test workflow for sqlite projects."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["android"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("/tmp"),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path("/flutter"),
+            database="sqlite",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_test_workflow(workflows_dir)
+            content = (workflows_dir / "test.yml").read_text()
+            assert "build_runner" in content
+            assert "Generate code" in content
+
+    def test_codegen_step_present_in_build_workflows_for_sqlite(self) -> None:
+        """Test that code generation step is added to build workflows for sqlite projects."""
+        config = Config(
+            project_name="TestApp",
+            platforms=["ios", "android"],
+            org="com.test",
+            channel="stable",
+            output_dir=Path("/tmp"),
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="reset",
+            dry_run=False,
+            verbose=False,
+            flutter_location=Path("/flutter"),
+            database="sqlite",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_build_workflows(workflows_dir)
+            for wf in ["build-ios.yml", "build-android.yml"]:
+                content = (workflows_dir / wf).read_text()
+                assert "build_runner" in content, wf
+                assert "Generate code" in content, wf
+
+    def test_build_artifacts_fail_when_missing(self, config: Config) -> None:
+        """Test that build artifact uploads use if-no-files-found: error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_build_workflows(workflows_dir)
+            for wf in workflows_dir.glob("build-*.yml"):
+                content = wf.read_text()
+                assert "if-no-files-found: error" in content, wf.name
+                assert "if-no-files-found: ignore" not in content, wf.name
+
+    def test_build_workflows_do_not_trigger_on_push_to_main(
+        self, config: Config
+    ) -> None:
+        """Test that build workflows only fire on tags and workflow_dispatch, not main."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_build_workflows(workflows_dir)
+            for wf in workflows_dir.glob("build-*.yml"):
+                content = wf.read_text()
+                # Triggering a full release build on every push to main wastes
+                # expensive CI minutes (macOS runners cost 10x Linux) and produces
+                # unsigned artifacts that cannot be shipped.
+                assert (
+                    "branches:" not in content
+                ), f"{wf.name} must not trigger on branch push"
+                assert "workflow_dispatch" in content, wf.name
+                assert "tags:" in content, wf.name
+
+    def test_pub_cache_key_includes_pubspec_yaml(self, config: Config) -> None:
+        """Test that the pub cache key hashes both pubspec.yaml and pubspec.lock."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+            workflows_dir = config.project_path / ".github" / "workflows"
+            for wf in workflows_dir.glob("*.yml"):
+                content = wf.read_text()
+                if "Cache pub" in content:
+                    assert "pubspec.yaml" in content, (
+                        f"{wf.name}: cache key must hash pubspec.yaml to catch "
+                        "constraint changes that don't update pubspec.lock"
+                    )
 
     def test_platforms_lowercase(self) -> None:
         """Test that platforms are converted to lowercase."""

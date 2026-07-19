@@ -24,6 +24,7 @@ class CicdGenerator:
         self.platforms = [p.lower() for p in config.platforms]
         self.flutter_channel = config.channel
         self.flutter_version = self._get_current_flutter_version()
+        self.needs_codegen = config.database == "sqlite"
 
     def _get_current_flutter_version(self) -> str:
         """Get the current Flutter version from the installed Flutter SDK."""
@@ -77,6 +78,15 @@ class CicdGenerator:
             return
         filepath.write_text(content)
 
+    def _codegen_step(self) -> str:
+        """Return the build_runner code generation step for workflows that need it."""
+        if not self.needs_codegen:
+            return ""
+        return """
+      - name: Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+"""
+
     def generate_cicd(self) -> None:
         """Generate all CI/CD files."""
         if self.config.dry_run:
@@ -124,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -136,17 +146,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Analyze
         run: flutter analyze
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request' && failure()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.createComment({{
@@ -180,7 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -192,7 +202,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -202,7 +212,7 @@ jobs:
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request' && failure()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.createComment({{
@@ -236,7 +246,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -248,19 +258,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Run unit tests
-        run: flutter test
+        run: flutter test --coverage
 
       - name: Upload coverage
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{{{ secrets.CODECOV_TOKEN }}}}
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 """
@@ -292,15 +302,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-ios:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -312,20 +320,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: ios-build
           path: build/ios/iphoneos/Runner.app
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-ios.yml"
@@ -340,15 +348,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -366,11 +372,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build APK
         run: flutter build apk --release
 
@@ -378,18 +384,18 @@ jobs:
         run: flutter build appbundle --release
 
       - name: Upload APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Upload AAB
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: android-aab
           path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-android.yml"
@@ -404,15 +410,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-web:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -424,20 +428,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Web
         run: flutter build web --release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: web-build
           path: build/web
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-web.yml"
@@ -452,15 +456,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-macos:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -472,20 +474,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build macOS
         run: flutter build macos --release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: build/macos/Build/Products/Release
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-macos.yml"
@@ -500,15 +502,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -520,7 +520,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install Linux dependencies
         run: |
@@ -536,16 +536,16 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Linux
         run: flutter build linux --release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: build/linux/x64/release/bundle
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-linux.yml"
@@ -560,15 +560,13 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -580,20 +578,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
-
+{self._codegen_step()}
       - name: Build Windows
         run: flutter build windows --release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: build/windows/x64/runner/Release
-          if-no-files-found: ignore
+          if-no-files-found: error
 """
 
         workflow_file = workflows_dir / "build-windows.yml"
@@ -726,7 +724,7 @@ If you plan to deploy to app stores or use code signing, you'll need to configur
 ### Automatic Triggers
 
 - **Lint, Format, Test**: Run on pull requests and pushes to `main` branch
-- **Build Workflows**: Run on pushes to `main` branch and version tags (`v*.*.*`)
+- **Build Workflows**: Run on version tags (`v*.*.*`) only — not on every push to `main`
 
 ### Manual Triggers
 

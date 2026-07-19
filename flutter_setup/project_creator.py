@@ -25,10 +25,10 @@ class ProjectCreator:
             console.print("[yellow]DRY RUN: Would create Flutter project[/yellow]")
             return
 
-        # Check if project already exists
-        if self.config.project_path.exists():
+        # Check if a Flutter project already exists (pubspec.yaml is the canonical marker)
+        if (self.config.project_path / "pubspec.yaml").exists():
             console.print(
-                f"  ⚠️  Directory '{self.config.project_path}' exists—skipping create."
+                f"  ⚠️  Flutter project '{self.config.project_path}' already exists—skipping create."
             )
             return
 

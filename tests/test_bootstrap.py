@@ -95,6 +95,31 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "analyze:" in content
 
+    def test_check_flutter_version_target_verifies_version(
+        self, config: Config
+    ) -> None:
+        """Test that check-flutter-version target compares actual vs required version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.flutter_version = "3.32.0"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            # The target must run flutter --version and compare against the required version
+            assert "--version" in content
+            assert "FLUTTER_REQUIRED_VERSION" in content
+            # awk-based comparison must be used (no python3 dependency)
+            assert "awk" in content
+            assert "python3" not in content
+            # pub get must NOT be inside check-flutter-version; it runs in bootstrap
+            check_target_start = content.index("check-flutter-version:")
+            phony_end = content.index(
+                ".PHONY: check-flutter-version", check_target_start
+            )
+            check_target_body = content[check_target_start:phony_end]
+            assert "pub get" not in check_target_body
+
     def test_patch_android_ndk_version(self, config: Config) -> None:
         """Test that build.gradle.kts is patched to pin the NDK version."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -158,6 +183,26 @@ class TestProjectBootstrap:
             ).exists()
             assert (config.project_path / "integration_test" / "app_test.dart").exists()
 
+    def test_integration_test_initializes_dotenv(self, config: Config) -> None:
+        """Test that the generated integration test calls dotenv.load() in setUpAll."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            content = (
+                config.project_path / "integration_test" / "app_test.dart"
+            ).read_text()
+            assert "flutter_dotenv" in content
+            assert "setUpAll" in content
+            assert "dotenv.load" in content
+            # Must use isOptional: true rather than a bare catch (_) {} which
+            # swallows unexpected errors (encoding faults, asset misconfig, etc.)
+            assert "isOptional: true" in content
+            assert "catch (_)" not in content
+
     def test_create_analysis_options(self, config: Config) -> None:
         """Test creating analysis options file."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -210,8 +255,56 @@ class TestProjectBootstrap:
             with patch.object(bootstrap, "_modify_main_dart"):
                 bootstrap._create_environment_support()
                 assert (config.project_path / ".env").exists()
+                assert (config.project_path / ".env.example").exists()
+                gitignore = config.project_path / ".gitignore"
+                assert gitignore.exists()
+                assert ".env" in gitignore.read_text()
+                # .env must NOT be added to pubspec assets: bundling a gitignored
+                # file causes Flutter's build tool to hard-fail on a clean checkout.
                 pubspec = yaml.safe_load(pubspec_path.read_text())
-                assert ".env" in pubspec["flutter"]["assets"]
+                assets = pubspec.get("flutter", {}).get("assets", [])
+                assert ".env" not in assets
+
+    def test_create_environment_support_skips_existing_files(
+        self, config: Config
+    ) -> None:
+        """Test that existing .env and .env.example are not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("flutter:\n  uses-material-design: true\n")
+            (config.project_path / ".env").write_text("EXISTING=1\n")
+            (config.project_path / ".env.example").write_text("EXISTING_EXAMPLE=1\n")
+            bootstrap = ProjectBootstrap(config)
+            with patch.object(bootstrap, "_modify_main_dart"):
+                bootstrap._create_environment_support()
+                assert (config.project_path / ".env").read_text() == "EXISTING=1\n"
+                assert (
+                    config.project_path / ".env.example"
+                ).read_text() == "EXISTING_EXAMPLE=1\n"
+
+    def test_add_env_to_gitignore_appends(self, config: Config) -> None:
+        """Test that .env is appended to an existing .gitignore."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            gitignore = config.project_path / ".gitignore"
+            gitignore.write_text("build/\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_to_gitignore()
+            assert ".env" in gitignore.read_text()
+
+    def test_add_env_to_gitignore_no_duplicate(self, config: Config) -> None:
+        """Test that .env is not duplicated if already in .gitignore."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            gitignore = config.project_path / ".gitignore"
+            gitignore.write_text(".env\nbuild/\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_env_to_gitignore()
+            assert gitignore.read_text().count(".env") == 1
 
     def test_modify_main_dart_exists(self, config: Config) -> None:
         """Test modifying main.dart when it exists."""
@@ -227,12 +320,93 @@ class TestProjectBootstrap:
             content = main_dart.read_text()
             assert "flutter_dotenv" in content
 
+    def test_modify_main_dart_uses_is_optional(self, config: Config) -> None:
+        """Test that dotenv.load() uses isOptional: true instead of a bare catch."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "lib").mkdir(parents=True)
+            main_dart = config.project_path / "lib" / "main.dart"
+            main_dart.write_text(
+                "import 'package:flutter/material.dart';\nvoid main() {\n  runApp(MyApp());\n}"
+            )
+            bootstrap._modify_main_dart()
+            content = main_dart.read_text()
+            assert "dotenv.load" in content
+            assert "isOptional: true" in content
+            assert "catch (_)" not in content
+
     def test_modify_main_dart_not_exists(self, config: Config) -> None:
         """Test modifying main.dart when it doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             bootstrap = ProjectBootstrap(config)
             bootstrap._modify_main_dart()  # Should not raise
+
+    def test_sqlite_scaffold_includes_migration_strategy(self, config: Config) -> None:
+        """Test that the generated AppDatabase includes a MigrationStrategy."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            data_dir = config.project_path / "lib" / "src" / "core" / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_sqlite_scaffold()
+            content = (data_dir / "app_database.dart").read_text()
+            assert "MigrationStrategy" in content
+            assert "onCreate" in content
+            assert "onUpgrade" in content
+
+    def test_sqlite_scaffold_onupgrade_is_not_silent_noop(self, config: Config) -> None:
+        """Test that onUpgrade throws instead of silently skipping migrations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            data_dir = config.project_path / "lib" / "src" / "core" / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_sqlite_scaffold()
+            content = (data_dir / "app_database.dart").read_text()
+            # onUpgrade must not be an empty async stub
+            assert "onUpgrade: (m, from, to) async {}," not in content
+            # must actively signal that migration is needed
+            assert "UnimplementedError" in content
+
+    def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
+        """Test that drift_dev is written with a version-pinned constraint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndependencies:\n  drift: ^2.31.0\n"
+                "dev_dependencies:\n  build_runner: ^2.9.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert "drift_dev" in content["dev_dependencies"]
+            # Must not use unconstrained 'any' — major version must match runtime drift
+            assert content["dev_dependencies"]["drift_dev"] != "any"
+            assert content["dev_dependencies"]["drift_dev"].startswith("^2")
+
+    def test_add_drift_dev_to_pubspec_skips_if_already_present(
+        self, config: Config
+    ) -> None:
+        """Test that drift_dev is not duplicated if already in pubspec.yaml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndev_dependencies:\n  drift_dev: ^2.0.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["dev_dependencies"]["drift_dev"] == "^2.0.0"
 
     def test_create_readme(self, config: Config) -> None:
         """Test creating README file."""
@@ -259,6 +433,24 @@ class TestProjectBootstrap:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = Exception("Failed")
             bootstrap._format_code()  # Should not raise, just warn
+
+    def test_run_pub_get(self, bootstrap: ProjectBootstrap, config: Config) -> None:
+        """Test that _run_pub_get calls flutter pub get in the project directory."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            bootstrap._run_pub_get()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert args[-2:] == ["pub", "get"]
+            assert mock_run.call_args[1]["cwd"] == config.project_path
+
+    def test_run_pub_get_failure(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_pub_get handles errors gracefully."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Failed")
+            bootstrap._run_pub_get()  # Should not raise, just warn
 
     def test_add_integration_test_sdk_dependency_no_pubspec(
         self, bootstrap: ProjectBootstrap, config: Config
@@ -496,6 +688,38 @@ class TestProjectBootstrap:
             assert config.package_name in integration_test
             assert "IntegrationTestWidgetsFlutterBinding" in integration_test
 
+    def test_widget_test_includes_pump_and_settle(self, config: Config) -> None:
+        """Test that generated widget test calls pumpAndSettle before asserting."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            widget_content = (
+                config.project_path / "test" / "widget" / "app_widget_test.dart"
+            ).read_text()
+            assert "pumpAndSettle" in widget_content
+            assert "find.text('Home')" in widget_content
+
+    def test_integration_test_includes_pump_and_settle(self, config: Config) -> None:
+        """Test that generated integration test calls pumpAndSettle before asserting."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            bootstrap = ProjectBootstrap(config)
+            (config.project_path / "test" / "unit").mkdir(parents=True)
+            (config.project_path / "test" / "widget").mkdir(parents=True)
+            (config.project_path / "integration_test").mkdir(parents=True)
+            bootstrap._create_sample_tests()
+            integration_content = (
+                config.project_path / "integration_test" / "app_test.dart"
+            ).read_text()
+            assert "pumpAndSettle" in integration_content
+            assert "find.text('Home')" in integration_content
+
     def test_create_environment_support_env_content(self, config: Config) -> None:
         """Test .env file content."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -584,6 +808,46 @@ class TestProjectBootstrap:
             main_content = (config.project_path / "lib" / "main.dart").read_text()
             assert "ProviderScope" in main_content
             assert "src/app/app.dart" in main_content
+
+    def test_clean_architecture_app_uses_stateless_widget(self, config: Config) -> None:
+        """Test that App uses StatelessWidget, not ConsumerWidget."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert "StatelessWidget" in app_content
+            assert "ConsumerWidget" not in app_content
+            assert "WidgetRef" not in app_content
+
+    def test_clean_architecture_home_screen_uses_stateless_widget(
+        self, config: Config
+    ) -> None:
+        """Test that HomeScreen uses StatelessWidget, not ConsumerWidget."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            screen_content = (
+                config.project_path
+                / "lib"
+                / "src"
+                / "features"
+                / "home"
+                / "presentation"
+                / "home_screen.dart"
+            ).read_text()
+            assert "StatelessWidget" in screen_content
+            assert "ConsumerWidget" not in screen_content
+            assert "WidgetRef" not in screen_content
 
     def test_create_sqlite_scaffold(self, config: Config) -> None:
         """Test creating Drift SQLite scaffold."""
@@ -799,6 +1063,40 @@ class TestProjectBootstrap:
 
         makefile = (project_dir / "Makefile").read_text()
         assert "generate: check-flutter-version" in makefile
+
+    def test_create_makefile_test_depends_on_generate_for_sqlite(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """test, analyze, and integration targets depend on generate for sqlite projects."""
+        config.output_dir = tmp_path
+        config.database = "sqlite"
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "test: check-flutter-version generate" in makefile
+        assert "analyze: check-flutter-version generate" in makefile
+        assert "integration: check-flutter-version generate" in makefile
+
+    def test_create_makefile_test_does_not_depend_on_generate_without_sqlite(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """test target does not depend on generate for non-sqlite projects."""
+        config.output_dir = tmp_path
+        project_dir = tmp_path / config.project_name
+        project_dir.mkdir()
+        bootstrap = ProjectBootstrap(config)
+
+        with patch.object(bootstrap, "_detect_flutter_version", return_value="3.24.0"):
+            bootstrap._create_makefile()
+
+        makefile = (project_dir / "Makefile").read_text()
+        assert "test: check-flutter-version\n" in makefile
+        assert "generate" not in makefile
 
     def test_create_makefile_explicit_version_overrides_detected(
         self, config: Config, tmp_path: Path
