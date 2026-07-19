@@ -136,7 +136,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -192,7 +192,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -248,7 +248,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -292,8 +292,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-ios:
@@ -312,7 +310,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -340,8 +338,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-android:
@@ -366,7 +362,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -404,8 +400,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-web:
@@ -424,7 +418,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -452,8 +446,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-macos:
@@ -472,7 +464,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -500,8 +492,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-linux:
@@ -520,7 +510,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install Linux dependencies
         run: |
@@ -560,8 +550,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
 
 jobs:
   build-windows:
@@ -580,7 +568,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.lock') }}}}
+          key: pub-${{{{ runner.os }}}}-${{{{ hashFiles('**/pubspec.yaml', '**/pubspec.lock') }}}}
 
       - name: Install dependencies
         run: flutter pub get
@@ -726,7 +714,7 @@ If you plan to deploy to app stores or use code signing, you'll need to configur
 ### Automatic Triggers
 
 - **Lint, Format, Test**: Run on pull requests and pushes to `main` branch
-- **Build Workflows**: Run on pushes to `main` branch and version tags (`v*.*.*`)
+- **Build Workflows**: Run on version tags (`v*.*.*`) only — not on every push to `main`
 
 ### Manual Triggers
 

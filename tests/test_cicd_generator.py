@@ -467,6 +467,44 @@ class TestCicdGenerator:
                 assert "if-no-files-found: error" in content, wf.name
                 assert "if-no-files-found: ignore" not in content, wf.name
 
+    def test_build_workflows_do_not_trigger_on_push_to_main(
+        self, config: Config
+    ) -> None:
+        """Test that build workflows only fire on tags and workflow_dispatch, not main."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_build_workflows(workflows_dir)
+            for wf in workflows_dir.glob("build-*.yml"):
+                content = wf.read_text()
+                # Triggering a full release build on every push to main wastes
+                # expensive CI minutes (macOS runners cost 10x Linux) and produces
+                # unsigned artifacts that cannot be shipped.
+                assert (
+                    "branches:" not in content
+                ), f"{wf.name} must not trigger on branch push"
+                assert "workflow_dispatch" in content, wf.name
+                assert "tags:" in content, wf.name
+
+    def test_pub_cache_key_includes_pubspec_yaml(self, config: Config) -> None:
+        """Test that the pub cache key hashes both pubspec.yaml and pubspec.lock."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+            workflows_dir = config.project_path / ".github" / "workflows"
+            for wf in workflows_dir.glob("*.yml"):
+                content = wf.read_text()
+                if "Cache pub" in content:
+                    assert "pubspec.yaml" in content, (
+                        f"{wf.name}: cache key must hash pubspec.yaml to catch "
+                        "constraint changes that don't update pubspec.lock"
+                    )
+
     def test_platforms_lowercase(self) -> None:
         """Test that platforms are converted to lowercase."""
         config = Config(

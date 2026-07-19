@@ -2,7 +2,7 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -51,40 +51,58 @@ class TestProjectCreator:
     def test_create_project_already_exists(
         self, creator: ProjectCreator, config: Config
     ) -> None:
-        """Test create_project when project already exists."""
-        # Patch the property by patching the underlying attributes
-        mock_output_dir = MagicMock()
-        mock_output_dir.__truediv__.return_value = MagicMock(exists=lambda: True)
-        creator.config.output_dir = mock_output_dir
-        creator.create_project()  # Should not raise
+        """Test create_project skips flutter create when pubspec.yaml exists."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True)
+            (config.project_path / "pubspec.yaml").touch()
+            with patch("subprocess.run") as mock_run:
+                creator.create_project()
+                mock_run.assert_not_called()  # flutter create must be skipped
+
+    def test_create_project_runs_when_dir_exists_without_pubspec(
+        self, creator: ProjectCreator, config: Config
+    ) -> None:
+        """Test flutter create runs when directory exists but pubspec.yaml is absent."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(
+                parents=True
+            )  # directory exists but no pubspec.yaml
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = Mock(returncode=0)
+                creator.create_project()
+                mock_run.assert_called_once()
 
     def test_create_project_success(
         self, creator: ProjectCreator, config: Config
     ) -> None:
         """Test successful project creation."""
-        mock_output_dir = MagicMock()
-        mock_project_path = MagicMock()
-        mock_project_path.exists.return_value = False
-        mock_output_dir.__truediv__.return_value = mock_project_path
-        creator.config.output_dir = mock_output_dir
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(returncode=0)
-            creator.create_project()
-            mock_run.assert_called_once()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = Mock(returncode=0)
+                creator.create_project()
+                mock_run.assert_called_once()
 
     def test_create_project_failure(
         self, creator: ProjectCreator, config: Config
     ) -> None:
         """Test project creation failure."""
-        mock_output_dir = MagicMock()
-        mock_project_path = MagicMock()
-        mock_project_path.exists.return_value = False
-        mock_output_dir.__truediv__.return_value = mock_project_path
-        creator.config.output_dir = mock_output_dir
-        with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.CalledProcessError(1, "flutter")
-            with pytest.raises(ProjectCreationError):
-                creator.create_project()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = subprocess.CalledProcessError(1, "flutter")
+                with pytest.raises(ProjectCreationError):
+                    creator.create_project()
 
     def test_build_create_command_app(self, creator: ProjectCreator) -> None:
         """Test building create command for app template."""

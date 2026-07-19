@@ -109,8 +109,9 @@ class TestProjectBootstrap:
             # The target must run flutter --version and compare against the required version
             assert "--version" in content
             assert "FLUTTER_REQUIRED_VERSION" in content
-            # python3 comparison must be present in the target body
-            assert "python3" in content
+            # awk-based comparison must be used (no python3 dependency)
+            assert "awk" in content
+            assert "python3" not in content
             # pub get must NOT be inside check-flutter-version; it runs in bootstrap
             check_target_start = content.index("check-flutter-version:")
             phony_end = content.index(
@@ -197,6 +198,10 @@ class TestProjectBootstrap:
             assert "flutter_dotenv" in content
             assert "setUpAll" in content
             assert "dotenv.load" in content
+            # Must use isOptional: true rather than a bare catch (_) {} which
+            # swallows unexpected errors (encoding faults, asset misconfig, etc.)
+            assert "isOptional: true" in content
+            assert "catch (_)" not in content
 
     def test_create_analysis_options(self, config: Config) -> None:
         """Test creating analysis options file."""
@@ -254,8 +259,11 @@ class TestProjectBootstrap:
                 gitignore = config.project_path / ".gitignore"
                 assert gitignore.exists()
                 assert ".env" in gitignore.read_text()
+                # .env must NOT be added to pubspec assets: bundling a gitignored
+                # file causes Flutter's build tool to hard-fail on a clean checkout.
                 pubspec = yaml.safe_load(pubspec_path.read_text())
-                assert ".env" in pubspec["flutter"]["assets"]
+                assets = pubspec.get("flutter", {}).get("assets", [])
+                assert ".env" not in assets
 
     def test_create_environment_support_skips_existing_files(
         self, config: Config
@@ -312,8 +320,8 @@ class TestProjectBootstrap:
             content = main_dart.read_text()
             assert "flutter_dotenv" in content
 
-    def test_modify_main_dart_wraps_dotenv_in_try_catch(self, config: Config) -> None:
-        """Test that the dotenv.load() call is wrapped in try/catch."""
+    def test_modify_main_dart_uses_is_optional(self, config: Config) -> None:
+        """Test that dotenv.load() uses isOptional: true instead of a bare catch."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             bootstrap = ProjectBootstrap(config)
@@ -324,9 +332,9 @@ class TestProjectBootstrap:
             )
             bootstrap._modify_main_dart()
             content = main_dart.read_text()
-            assert "try {" in content
             assert "dotenv.load" in content
-            assert "} catch (_) {}" in content
+            assert "isOptional: true" in content
+            assert "catch (_)" not in content
 
     def test_modify_main_dart_not_exists(self, config: Config) -> None:
         """Test modifying main.dart when it doesn't exist."""
@@ -365,19 +373,23 @@ class TestProjectBootstrap:
             assert "UnimplementedError" in content
 
     def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
-        """Test that drift_dev is written directly to pubspec.yaml for sqlite projects."""
+        """Test that drift_dev is written with a version-pinned constraint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.database = "sqlite"
             config.project_path.mkdir(parents=True, exist_ok=True)
             pubspec_path = config.project_path / "pubspec.yaml"
             pubspec_path.write_text(
-                "name: test\ndev_dependencies:\n  build_runner: ^2.9.0\n"
+                "name: test\ndependencies:\n  drift: ^2.31.0\n"
+                "dev_dependencies:\n  build_runner: ^2.9.0\n"
             )
             bootstrap = ProjectBootstrap(config)
             bootstrap._add_drift_dev_to_pubspec()
             content = yaml.safe_load(pubspec_path.read_text())
             assert "drift_dev" in content["dev_dependencies"]
+            # Must not use unconstrained 'any' — major version must match runtime drift
+            assert content["dev_dependencies"]["drift_dev"] != "any"
+            assert content["dev_dependencies"]["drift_dev"].startswith("^2")
 
     def test_add_drift_dev_to_pubspec_skips_if_already_present(
         self, config: Config
