@@ -127,8 +127,8 @@ class ProjectBootstrap:
         # flutter version pin) are resolved before the user's first make target.
         self._run_pub_get()
 
-        # Create README
-        self._create_readme()
+        # Create README (append section if file already exists)
+        self._append_readme()
 
         # Format code
         self._format_code()
@@ -236,7 +236,12 @@ generate:{version_dep}
             android_sdk_header = (
                 "ANDROID_SDK_ROOT ?= $(or $(ANDROID_HOME),/opt/android-sdk)\n"
                 "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
-                "REQUIRED_NDK := 27.0.12077973\n\n"
+                "AVDMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/avdmanager\n"
+                "REQUIRED_NDK := 27.0.12077973\n"
+                "ANDROID_AVD_NAME := flutter_dev\n"
+                "ANDROID_API_LEVEL := 35\n"
+                "ANDROID_AVD_DEVICE := pixel_6\n"
+                "ANDROID_SYSTEM_IMAGE := system-images;android-$(ANDROID_API_LEVEL);google_apis;x86_64\n\n"
             )
             android_sdk_dep = " check-android-sdk"
             android_sdk_target = """
@@ -249,13 +254,38 @@ check-android-sdk:
 \tfi
 
 .PHONY: check-android-sdk
+
+setup-emulator:
+\t@if $(AVDMANAGER) list avd | grep -q "Name: $(ANDROID_AVD_NAME)"; then \\
+\t\techo "Emulator '$(ANDROID_AVD_NAME)' already exists"; \\
+\telse \\
+\t\techo "Installing system image $(ANDROID_SYSTEM_IMAGE)..."; \\
+\t\t$(SDKMANAGER) "$(ANDROID_SYSTEM_IMAGE)"; \\
+\t\techo "Creating emulator '$(ANDROID_AVD_NAME)'..."; \\
+\t\techo no | $(AVDMANAGER) create avd --name "$(ANDROID_AVD_NAME)" --package "$(ANDROID_SYSTEM_IMAGE)" --device "$(ANDROID_AVD_DEVICE)"; \\
+\tfi
+
+.PHONY: setup-emulator
 """
+
+        if "android" in self.config.platforms:
+            run_android_emulator_check = (
+                '\t@if ! adb devices | grep -q "^emulator"; then \\\n'
+                '\t\techo "No emulator running, launching $(ANDROID_AVD_NAME)..."; \\\n'
+                f"\t\t{flutter_cmd} emulators --launch $(ANDROID_AVD_NAME); \\\n"
+                '\t\techo "Waiting for emulator to boot..."; \\\n'
+                '\t\tadb -e wait-for-device && adb -e shell \'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done\'; \\\n'
+                '\t\techo "Emulator ready."; \\\n'
+                "\tfi\n"
+            )
+        else:
+            run_android_emulator_check = ""
 
         return f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
 \t{flutter_cmd} run -d ios
 
 run-android:{version_dep}{android_sdk_dep}
-\t{flutter_cmd} run -d android
+{run_android_emulator_check}\t{flutter_cmd} run -d android
 
 analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
