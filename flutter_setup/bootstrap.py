@@ -56,6 +56,9 @@ class ProjectBootstrap:
         # Add dependencies
         self._add_dependencies()
 
+        # Update pubspec description (flutter create leaves a generic placeholder)
+        self._update_pubspec_description()
+
         # Create environment support (.env file + gitignore entry; NOT added to assets)
         self._create_environment_support()
 
@@ -721,6 +724,23 @@ class FirebaseNotificationsService {
             dependencies.append("mocktail")
 
         return dependencies
+
+    def _update_pubspec_description(self) -> None:
+        """Replace the generic 'A new Flutter project.' description in pubspec.yaml."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            pubspec["description"] = (
+                f"A {self.config.project_name} Flutter application."
+            )
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+            console.print("  ✅ pubspec description updated")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to update pubspec description: {e}")
 
     def _pin_flutter_sdk_version(self, version: str) -> None:
         """Set the flutter SDK constraint in pubspec.yaml to >= the given version."""

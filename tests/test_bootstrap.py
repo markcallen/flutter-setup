@@ -1151,6 +1151,31 @@ class TestProjectBootstrap:
         with patch("subprocess.run", side_effect=OSError("not found")):
             assert bootstrap._detect_flutter_version() is None
 
+    # --- _update_pubspec_description ---
+
+    def test_update_pubspec_description(self, config: Config) -> None:
+        """Test that pubspec description is updated to include the project name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: testapp\ndescription: A new Flutter project.\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert config.project_name in pubspec["description"]
+            assert "A new Flutter project." != pubspec["description"]
+
+    def test_update_pubspec_description_no_pubspec(self, config: Config) -> None:
+        """Test that missing pubspec.yaml is handled gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()  # should not raise
+
     # --- _pin_flutter_sdk_version ---
 
     def test_pin_flutter_sdk_version_writes_constraint(
