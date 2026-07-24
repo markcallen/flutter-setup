@@ -287,7 +287,7 @@ def check_command(verbose: bool) -> None:
         sys.exit(1)
 
 
-@cli.command("setup")
+@cli.command("create")
 @click.argument("project_name", required=False, default=None)
 @click.argument("platforms", nargs=-1)
 @click.option(
@@ -384,7 +384,7 @@ def check_command(verbose: bool) -> None:
     help="Enable verbose output",
 )
 @click.pass_context
-def setup_command(
+def create_command(
     ctx: click.Context,
     project_name: str | None,
     platforms: tuple[str, ...],
@@ -405,7 +405,7 @@ def setup_command(
     dry_run: bool,
     verbose: bool,
 ) -> None:
-    """Set up a complete Flutter development environment."""
+    """Create a new Flutter project with complete development environment setup."""
     try:
         print_banner()
 
@@ -476,6 +476,14 @@ def setup_command(
         if project_name is None:
             project_name = click.prompt("Project name", type=str)
         project_name = cast(str, project_name)
+
+        # Guard: refuse to create if the target directory already exists
+        target_project_dir = Path(dir) / project_name
+        if target_project_dir.exists():
+            raise click.UsageError(
+                f"Directory '{project_name}' already exists in {dir!r}. "
+                f"Use 'flutter-setup append' to add tooling to an existing project."
+            )
 
         if not platforms:
             console.print(
@@ -639,6 +647,12 @@ def setup_command(
             notifications_provider=merged_notifications_provider,
             flutter_version=flutter_version,
         )
+
+        if dry_run:
+            console.print(
+                "\n[yellow]DRY RUN: Would create Flutter project (no changes made)[/yellow]"
+            )
+            return
 
         # Create and run setup
         setup = FlutterSetup(config)
@@ -843,6 +857,12 @@ def append_command(
                 notifications_provider=notifications_provider,
                 flutter_version=flutter_version,
             )
+
+            if dry_run:
+                console.print(
+                    "\n[yellow]DRY RUN: Would append tooling to Flutter project (no changes made)[/yellow]"
+                )
+                return
 
             bootstrap = ProjectBootstrap(config, force=force)
             bootstrap.append_project()
