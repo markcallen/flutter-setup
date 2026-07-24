@@ -13,7 +13,6 @@ from .appender import (
     PLATFORM_DIRS,
     detect_flutter_project,
     detect_platforms,
-    get_pubspec_name,
 )
 from .bootstrap import ProjectBootstrap
 from .core import FlutterSetup
@@ -830,10 +829,8 @@ def append_command(
         is_flutter = detect_flutter_project(target_path)
 
         if is_flutter:
-            # Existing Flutter project: infer name from directory
-            inferred_name = get_pubspec_name(target_path) or target_path.name
             platforms = detect_platforms(target_path)
-            console.print(f"[dim]Detected Flutter project: {inferred_name}[/dim]")
+            console.print(f"[dim]Detected Flutter project: {target_path.name}[/dim]")
             console.print(f"[dim]Detected platforms: {', '.join(platforms)}[/dim]")
 
             config = Config(

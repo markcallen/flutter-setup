@@ -497,21 +497,16 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="myapp"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms",
-                        return_value=["ios", "android"],
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 0
-                            mock_bs.append_project.assert_called_once()
+                with patch(
+                    "flutter_setup.cli.detect_platforms",
+                    return_value=["ios", "android"],
+                ):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 0
+                        mock_bs.append_project.assert_called_once()
 
     def test_append_existing_flutter_project_no_pubspec_name(
         self, tmp_path: Path
@@ -521,22 +516,17 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value=None):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms",
-                        return_value=["ios"],
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 0
-                            config = mock_bs_class.call_args.args[0]
-                            assert config.project_name == tmp_path.name
+                with patch(
+                    "flutter_setup.cli.detect_platforms",
+                    return_value=["ios"],
+                ):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 0
+                        config = mock_bs_class.call_args.args[0]
+                        assert config.project_name == tmp_path.name
 
     def test_append_existing_flutter_project_with_force(self, tmp_path: Path) -> None:
         """--force is forwarded to ProjectBootstrap."""
@@ -544,21 +534,16 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["web"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            result = runner.invoke(
-                                cli,
-                                ["append", "--dir", str(tmp_path), "--force"],
-                            )
-                            assert result.exit_code == 0
-                            assert mock_bs_class.call_args.kwargs["force"] is True
+                with patch("flutter_setup.cli.detect_platforms", return_value=["web"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(
+                            cli,
+                            ["append", "--dir", str(tmp_path), "--force"],
+                        )
+                        assert result.exit_code == 0
+                        assert mock_bs_class.call_args.kwargs["force"] is True
 
     def test_append_non_flutter_with_project_name(self, tmp_path: Path) -> None:
         """Non-Flutter directory with project_name argument runs full FlutterSetup."""
@@ -635,22 +620,13 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            mock_bs.append_project.side_effect = FlutterSetupError(
-                                "boom"
-                            )
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 1
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        mock_bs.append_project.side_effect = FlutterSetupError("boom")
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 1
 
     def test_append_keyboard_interrupt(self, tmp_path: Path) -> None:
         """KeyboardInterrupt exits with code 1."""
@@ -658,20 +634,13 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            mock_bs.append_project.side_effect = KeyboardInterrupt()
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 1
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        mock_bs.append_project.side_effect = KeyboardInterrupt()
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 1
 
     def test_append_unexpected_exception(self, tmp_path: Path) -> None:
         """Unexpected exceptions exit with code 1."""
@@ -679,20 +648,13 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            mock_bs.append_project.side_effect = RuntimeError("oops")
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 1
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        mock_bs.append_project.side_effect = RuntimeError("oops")
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 1
 
     def test_append_dry_run(self, tmp_path: Path) -> None:
         """--dry-run exits 0 without calling append_project."""
@@ -700,21 +662,16 @@ class TestAppendCommand:
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            result = runner.invoke(
-                                cli,
-                                ["append", "--dir", str(tmp_path), "--dry-run"],
-                            )
-                            assert result.exit_code == 0
-                            mock_bs.append_project.assert_not_called()
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(
+                            cli,
+                            ["append", "--dir", str(tmp_path), "--dry-run"],
+                        )
+                        assert result.exit_code == 0
+                        mock_bs.append_project.assert_not_called()
 
     def test_append_no_flutter_location_in_config(self, tmp_path: Path) -> None:
         """Falls back to default flutter location when not set in config."""
@@ -725,21 +682,14 @@ class TestAppendCommand:
                 "project": {},
             }
             with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
-                with patch("flutter_setup.cli.get_pubspec_name", return_value="app"):
-                    with patch(
-                        "flutter_setup.cli.detect_platforms", return_value=["ios"]
-                    ):
-                        with patch(
-                            "flutter_setup.cli.ProjectBootstrap"
-                        ) as mock_bs_class:
-                            mock_bs = Mock()
-                            mock_bs_class.return_value = mock_bs
-                            result = runner.invoke(
-                                cli, ["append", "--dir", str(tmp_path)]
-                            )
-                            assert result.exit_code == 0
-                            config = mock_bs_class.call_args.args[0]
-                            assert "flutter" in str(config.flutter_location)
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 0
+                        config = mock_bs_class.call_args.args[0]
+                        assert "flutter" in str(config.flutter_location)
 
     def test_append_non_flutter_interactive_invalid_platforms(
         self, tmp_path: Path

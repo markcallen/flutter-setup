@@ -72,7 +72,7 @@ def _filter_new_makefile_content(
 class ProjectBootstrap:
     """Bootstraps development environment for Flutter projects."""
 
-    def __init__(self, config: Config, force: bool = False):
+    def __init__(self, config: Config, force: bool = False) -> None:
         """Initialize ProjectBootstrap."""
         self.config = config
         self.force = force
@@ -289,13 +289,18 @@ setup-emulator:
         else:
             run_android_emulator_check = ""
 
-        return f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
-\t{flutter_cmd} run -d ios
+        ios_target = ""
+        if "ios" in self.config.platforms:
+            ios_target = f"run-ios:{version_dep}\n\t{flutter_cmd} run -d ios\n\n"
 
-run-android:{version_dep}{android_sdk_dep}
-{run_android_emulator_check}\t{flutter_cmd} run -d android
+        android_target = ""
+        if "android" in self.config.platforms:
+            android_target = (
+                f"run-android:{version_dep}{android_sdk_dep}\n"
+                f"{run_android_emulator_check}\t{flutter_cmd} run -d android\n\n"
+            )
 
-analyze:{version_dep}{codegen_dep}
+        return f"""{version_header}{android_sdk_header}{web_target}{ios_target}{android_target}analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
 
 test:{version_dep}{codegen_dep}

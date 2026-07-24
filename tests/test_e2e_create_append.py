@@ -289,8 +289,8 @@ class TestAppendSafeguards:
         config = mock_bs.call_args.args[0]
         assert set(config.platforms) == {"ios", "web"}
 
-    def test_append_infers_project_name_from_pubspec(self, tmp_path: Path) -> None:
-        """Project name is read from pubspec.yaml, not the directory name."""
+    def test_append_uses_directory_name_as_project_name(self, tmp_path: Path) -> None:
+        """Config.project_name is always the directory name, not the pubspec name."""
         runner = CliRunner()
         project_dir = tmp_path / "my_app_dir"
         project_dir.mkdir()
@@ -304,8 +304,9 @@ class TestAppendSafeguards:
                 result = runner.invoke(cli, ["append", "--dir", str(project_dir)])
 
         assert result.exit_code == 0
-        # The printed output mentions the detected name
-        assert "real_package_name" in result.output
+        assert "my_app_dir" in result.output
+        config = mock_bs.call_args.args[0]
+        assert config.project_name == "my_app_dir"
 
     def test_append_org_from_config_file(self, tmp_path: Path) -> None:
         """org is read from the user config file when not passed on CLI."""
