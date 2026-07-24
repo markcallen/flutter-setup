@@ -506,7 +506,39 @@ Future<void> main() async {{
 }}
 """)
 
+        self._create_assets_scaffold()
+
         console.print("  ✅ Clean Architecture scaffold created")
+
+    def _create_assets_scaffold(self) -> None:
+        """Create assets/ directories and declare them in pubspec.yaml.
+
+        Uses .gitkeep sentinels so the empty directories are tracked in git.
+        """
+        assets_root = self.config.project_path / "assets"
+        asset_dirs = [
+            assets_root / "images",
+            assets_root / "fonts",
+        ]
+        for asset_dir in asset_dirs:
+            asset_dir.mkdir(parents=True, exist_ok=True)
+            (asset_dir / ".gitkeep").touch()
+
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            flutter_section = pubspec.setdefault("flutter", {})
+            assets = flutter_section.setdefault("assets", [])
+            if "assets/images/" not in assets:
+                assets.append("assets/images/")
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+            console.print("  ✅ Assets directories created")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to declare assets in pubspec.yaml: {e}")
 
     def _create_sqlite_scaffold(self) -> None:
         """Create a Drift/SQLite starter database scaffold."""

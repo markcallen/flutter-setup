@@ -1041,6 +1041,53 @@ class TestProjectBootstrap:
             assert "path: '/'" in router_content
             assert "WidgetRef" not in router_content
 
+    def test_create_assets_scaffold_creates_directories(self, config: Config) -> None:
+        """Test that assets directories are created with .gitkeep sentinels."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            assert (config.project_path / "assets" / "images").is_dir()
+            assert (config.project_path / "assets" / "fonts").is_dir()
+            assert (config.project_path / "assets" / "images" / ".gitkeep").exists()
+            assert (config.project_path / "assets" / "fonts" / ".gitkeep").exists()
+
+    def test_create_assets_scaffold_declares_in_pubspec(self, config: Config) -> None:
+        """Test that assets/images/ is declared in pubspec.yaml flutter.assets."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\nflutter:\n  uses-material-design: true\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert "assets/images/" in pubspec["flutter"]["assets"]
+
+    def test_create_assets_scaffold_idempotent(self, config: Config) -> None:
+        """Test that calling _create_assets_scaffold twice does not duplicate entries."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\nflutter:\n  uses-material-design: true\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_assets_scaffold()
+            bootstrap._create_assets_scaffold()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["flutter"]["assets"].count("assets/images/") == 1
+
     def test_create_sqlite_scaffold(self, config: Config) -> None:
         """Test creating Drift SQLite scaffold."""
         config.database = "sqlite"
