@@ -69,6 +69,11 @@ class ProjectBootstrap:
         # flutter version pin) are resolved before the user's first make target.
         self._run_pub_get()
 
+        # Run build_runner for projects that require code generation (Drift,
+        # Riverpod, Freezed) so the project compiles immediately after setup.
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
+            self._run_build_runner()
+
         # Create README
         self._create_readme()
 
@@ -958,6 +963,17 @@ API_URL=https://api.example.com
         else:
             run_cmd = "flutter run"
 
+        codegen_section = ""
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
+            codegen_section = """
+## Code generation
+This project uses `build_runner` for code generation (Drift, Riverpod, Freezed).
+Generation runs automatically during setup. To re-run manually:
+```bash
+make generate
+```
+"""
+
         readme_content = f"""# {self.config.project_name}
 
 Flutter app scaffolded for Cursor.
@@ -967,7 +983,7 @@ Flutter app scaffolded for Cursor.
 flutter pub get
 {run_cmd}
 ```
-
+{codegen_section}
 ## Testing
 ```bash
 make test           # unit + widget tests
@@ -1020,6 +1036,30 @@ project before using the generated Firebase services.
             console.print("  ✅ flutter pub get completed")
         except Exception as e:
             console.print(f"  ⚠️  flutter pub get warning: {e}")
+
+    def _run_build_runner(self) -> None:
+        """Run build_runner to generate code for Drift, Riverpod, and Freezed.
+
+        Projects using sqlite or clean architecture include code-generated files
+        (*.g.dart, *.freezed.dart). Without this step the project will not
+        compile on first checkout.
+        """
+        try:
+            subprocess.run(
+                [
+                    str(self.flutter_root / "bin" / "dart"),
+                    "run",
+                    "build_runner",
+                    "build",
+                    "--delete-conflicting-outputs",
+                ],
+                cwd=self.config.project_path,
+                check=False,
+                capture_output=True,
+            )
+            console.print("  ✅ Code generation completed (build_runner)")
+        except Exception as e:
+            console.print(f"  ⚠️  build_runner warning: {e}")
 
     def _format_code(self) -> None:
         """Format the generated code."""

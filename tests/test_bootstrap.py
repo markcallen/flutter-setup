@@ -470,6 +470,101 @@ class TestProjectBootstrap:
             mock_run.side_effect = Exception("Failed")
             bootstrap._run_pub_get()  # Should not raise, just warn
 
+    def test_run_build_runner(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner calls dart run build_runner build."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            bootstrap._run_build_runner()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "build_runner" in args
+            assert "build" in args
+            assert "--delete-conflicting-outputs" in args
+            assert mock_run.call_args[1]["cwd"] == config.project_path
+
+    def test_run_build_runner_failure(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner handles errors gracefully."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Failed")
+            bootstrap._run_build_runner()  # Should not raise, just warn
+
+    def test_bootstrap_project_runs_build_runner_for_sqlite(
+        self, config: Config
+    ) -> None:
+        """Test that bootstrap_project calls _run_build_runner for sqlite projects."""
+        config.database = "sqlite"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_called_once()
+
+    def test_bootstrap_project_runs_build_runner_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that bootstrap_project calls _run_build_runner for clean architecture."""
+        config.architecture = "clean"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_called_once()
+
+    def test_bootstrap_project_skips_build_runner_for_basic_no_db(
+        self, config: Config
+    ) -> None:
+        """Test that build_runner is not invoked for basic arch with no database."""
+        config.architecture = "basic"
+        config.database = "none"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_not_called()
+
     def test_add_integration_test_sdk_dependency_no_pubspec(
         self, bootstrap: ProjectBootstrap, config: Config
     ) -> None:
@@ -802,6 +897,36 @@ class TestProjectBootstrap:
             assert "make integration" in content
             assert "make analyze" in content
             assert ".env" in content
+            # basic arch + no db should NOT include the codegen section
+            assert "make generate" not in content
+
+    def test_create_readme_includes_codegen_section_for_sqlite(
+        self, config: Config
+    ) -> None:
+        """Test that the README includes the code generation section for sqlite projects."""
+        config.database = "sqlite"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_readme()
+            content = (config.project_path / "README.md").read_text()
+            assert "make generate" in content
+            assert "build_runner" in content
+
+    def test_create_readme_includes_codegen_section_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that the README includes the code generation section for clean arch."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_readme()
+            content = (config.project_path / "README.md").read_text()
+            assert "make generate" in content
+            assert "build_runner" in content
 
     def test_create_clean_architecture_scaffold(self, config: Config) -> None:
         """Test creating Clean Architecture scaffold."""
