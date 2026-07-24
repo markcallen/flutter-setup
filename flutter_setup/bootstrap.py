@@ -670,7 +670,18 @@ class FirebaseNotificationsService {
         dependencies = ["flutter_dotenv"]
 
         if self.config.architecture == "clean":
-            dependencies.append("flutter_riverpod")
+            dependencies.extend(
+                [
+                    "flutter_riverpod",
+                    "riverpod_annotation",
+                    "go_router",
+                    "freezed_annotation",
+                    "json_annotation",
+                    "collection",
+                    "intl",
+                    "uuid",
+                ]
+            )
 
         if self.config.database == "sqlite":
             dependencies.extend(
@@ -694,6 +705,9 @@ class FirebaseNotificationsService {
     def _dev_dependencies(self) -> list[str]:
         """Return dev dependencies required by selected scaffolds."""
         dependencies = ["flutter_lints"]
+
+        if self.config.architecture == "clean":
+            dependencies.extend(["riverpod_generator", "freezed", "json_serializable"])
 
         if self.config.database == "sqlite":
             dependencies.extend(["drift_dev", "build_runner"])

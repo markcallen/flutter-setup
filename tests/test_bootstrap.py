@@ -932,15 +932,45 @@ class TestProjectBootstrap:
         runtime_dependencies = bootstrap._runtime_dependencies()
         dev_dependencies = bootstrap._dev_dependencies()
 
+        # clean arch runtime packages
         assert "flutter_riverpod" in runtime_dependencies
+        assert "riverpod_annotation" in runtime_dependencies
+        assert "go_router" in runtime_dependencies
+        assert "freezed_annotation" in runtime_dependencies
+        assert "json_annotation" in runtime_dependencies
+        assert "collection" in runtime_dependencies
+        assert "intl" in runtime_dependencies
+        assert "uuid" in runtime_dependencies
+        # sqlite packages
         assert "drift" in runtime_dependencies
+        # firebase packages
         assert "firebase_core" in runtime_dependencies
         assert "firebase_auth" in runtime_dependencies
         assert "cloud_firestore" in runtime_dependencies
         assert "firebase_messaging" in runtime_dependencies
+        # clean arch dev packages
+        assert "riverpod_generator" in dev_dependencies
+        assert "freezed" in dev_dependencies
+        assert "json_serializable" in dev_dependencies
+        # sqlite dev packages
         assert "drift_dev" in dev_dependencies
         assert "build_runner" in dev_dependencies
         assert "mocktail" in dev_dependencies
+
+    def test_dependency_selection_basic_architecture(self, config: Config) -> None:
+        """Test that clean-arch packages are absent for basic architecture."""
+        config.architecture = "basic"
+        bootstrap = ProjectBootstrap(config)
+
+        runtime_dependencies = bootstrap._runtime_dependencies()
+        dev_dependencies = bootstrap._dev_dependencies()
+
+        assert "go_router" not in runtime_dependencies
+        assert "riverpod_annotation" not in runtime_dependencies
+        assert "freezed_annotation" not in runtime_dependencies
+        assert "riverpod_generator" not in dev_dependencies
+        assert "freezed" not in dev_dependencies
+        assert "json_serializable" not in dev_dependencies
 
     # --- _detect_flutter_version ---
 
