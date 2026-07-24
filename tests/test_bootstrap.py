@@ -95,6 +95,20 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "analyze:" in content
 
+    def test_create_makefile_generates_target_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that make generate target is created for clean architecture projects."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            assert "generate:" in content
+            assert "build_runner" in content
+
     def test_check_flutter_version_target_verifies_version(
         self, config: Config
     ) -> None:
@@ -484,10 +498,18 @@ class TestProjectBootstrap:
             assert "--delete-conflicting-outputs" in args
             assert mock_run.call_args[1]["cwd"] == config.project_path
 
+    def test_run_build_runner_nonzero_exit_warns(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner warns when build_runner exits non-zero."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=1, stderr=b"some error")
+            bootstrap._run_build_runner()  # Should not raise, just warn
+
     def test_run_build_runner_failure(
         self, bootstrap: ProjectBootstrap, config: Config
     ) -> None:
-        """Test that _run_build_runner handles errors gracefully."""
+        """Test that _run_build_runner handles subprocess exceptions gracefully."""
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = Exception("Failed")
             bootstrap._run_build_runner()  # Should not raise, just warn
@@ -985,6 +1007,24 @@ class TestProjectBootstrap:
             assert f"title: '{config.project_name}'" in app_content
             assert "Flutter App" not in app_content
 
+    def test_clean_architecture_app_title_escapes_apostrophe(
+        self, config: Config
+    ) -> None:
+        """Test that apostrophes in the project name are escaped in app.dart."""
+        config.project_name = "Sam's App"
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            # The apostrophe must be escaped so the Dart string is valid
+            assert r"Sam\'s App" in app_content
+
     def test_clean_architecture_home_screen_uses_stateless_widget(
         self, config: Config
     ) -> None:
@@ -1193,6 +1233,16 @@ class TestProjectBootstrap:
         assert "freezed" not in dev_dependencies
         assert "json_serializable" not in dev_dependencies
 
+    def test_clean_arch_without_sqlite_includes_build_runner(
+        self, config: Config
+    ) -> None:
+        """build_runner must be in dev deps for clean arch even without sqlite."""
+        config.architecture = "clean"
+        config.database = "none"
+        bootstrap = ProjectBootstrap(config)
+        dev_deps = bootstrap._dev_dependencies()
+        assert "build_runner" in dev_deps
+
     # --- _detect_flutter_version ---
 
     def test_detect_flutter_version_from_stdout(
@@ -1254,6 +1304,21 @@ class TestProjectBootstrap:
             config.project_path.mkdir(parents=True, exist_ok=True)
             bootstrap = ProjectBootstrap(config)
             bootstrap._update_pubspec_description()  # should not raise
+
+    def test_update_pubspec_description_does_not_overwrite_custom(
+        self, config: Config
+    ) -> None:
+        """Test that a developer-customised description is not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            custom = "My custom project description."
+            pubspec_path.write_text(f"name: testapp\ndescription: {custom}\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["description"] == custom
 
     # --- _pin_flutter_sdk_version ---
 

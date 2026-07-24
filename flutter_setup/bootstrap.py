@@ -170,7 +170,7 @@ check-flutter-version:
 
         generate_target = ""
         codegen_dep = ""
-        if self.config.database == "sqlite":
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
             generate_target = f"""
 generate:{version_dep}
 \tdart run build_runner build --delete-conflicting-outputs
@@ -434,6 +434,7 @@ final router = GoRouter(
 """
         )
 
+        safe_title = self.config.project_name.replace("'", "\\'")
         (src_dir / "app" / "app.dart").write_text(
             f"""import 'package:flutter/material.dart';
 
@@ -445,7 +446,7 @@ class App extends StatelessWidget {{
   @override
   Widget build(BuildContext context) {{
     return MaterialApp.router(
-      title: '{self.config.project_name}',
+      title: '{safe_title}',
       theme: ThemeData(useMaterial3: true),
       routerConfig: router,
     );
@@ -763,7 +764,12 @@ class FirebaseNotificationsService {
         dependencies = ["flutter_lints"]
 
         if self.config.architecture == "clean":
-            dependencies.extend(["riverpod_generator", "freezed", "json_serializable"])
+            # build_runner is required to run riverpod_generator, freezed, and
+            # json_serializable — add it here so clean-arch projects without
+            # sqlite still get code generation support.
+            dependencies.extend(
+                ["riverpod_generator", "freezed", "json_serializable", "build_runner"]
+            )
 
         if self.config.database == "sqlite":
             dependencies.extend(["drift_dev", "build_runner"])
@@ -773,14 +779,23 @@ class FirebaseNotificationsService {
 
         return dependencies
 
+    _GENERIC_PUBSPEC_DESCRIPTION = "A new Flutter project."
+
     def _update_pubspec_description(self) -> None:
-        """Replace the generic 'A new Flutter project.' description in pubspec.yaml."""
+        """Replace the generic flutter-create description in pubspec.yaml.
+
+        Only overwrites the known placeholder left by `flutter create` so that
+        re-running bootstrap does not clobber a description the developer has
+        already customised.
+        """
         pubspec_path = self.config.project_path / "pubspec.yaml"
         if not pubspec_path.exists():
             return
         try:
             with open(pubspec_path, "r") as f:
                 pubspec = yaml.safe_load(f) or {}
+            if pubspec.get("description") != self._GENERIC_PUBSPEC_DESCRIPTION:
+                return
             pubspec["description"] = (
                 f"A {self.config.project_name} Flutter application."
             )
@@ -1113,7 +1128,7 @@ project before using the generated Firebase services.
         compile on first checkout.
         """
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     str(self.flutter_root / "bin" / "dart"),
                     "run",
@@ -1125,7 +1140,14 @@ project before using the generated Firebase services.
                 check=False,
                 capture_output=True,
             )
-            console.print("  ✅ Code generation completed (build_runner)")
+            if result.returncode == 0:
+                console.print("  ✅ Code generation completed (build_runner)")
+            else:
+                stderr = result.stderr.decode(errors="replace") if result.stderr else ""
+                console.print(
+                    f"  ⚠️  build_runner exited with code {result.returncode}"
+                    + (f": {stderr.strip()}" if stderr.strip() else "")
+                )
         except Exception as e:
             console.print(f"  ⚠️  build_runner warning: {e}")
 
