@@ -64,7 +64,7 @@ class TestProjectBootstrap:
                                     with patch.object(
                                         bootstrap, "_create_environment_support"
                                     ):
-                                        with patch.object(bootstrap, "_create_readme"):
+                                        with patch.object(bootstrap, "_append_readme"):
                                             with patch.object(
                                                 bootstrap, "_format_code"
                                             ):
@@ -531,7 +531,7 @@ class TestProjectBootstrap:
             patch.object(bootstrap, "_create_environment_support"),
             patch.object(bootstrap, "_run_pub_get"),
             patch.object(bootstrap, "_run_build_runner") as mock_br,
-            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_append_readme"),
             patch.object(bootstrap, "_format_code"),
             patch.object(bootstrap, "_detect_flutter_version", return_value=None),
         ):
@@ -555,7 +555,7 @@ class TestProjectBootstrap:
             patch.object(bootstrap, "_create_environment_support"),
             patch.object(bootstrap, "_run_pub_get"),
             patch.object(bootstrap, "_run_build_runner") as mock_br,
-            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_append_readme"),
             patch.object(bootstrap, "_format_code"),
             patch.object(bootstrap, "_detect_flutter_version", return_value=None),
         ):
@@ -580,7 +580,7 @@ class TestProjectBootstrap:
             patch.object(bootstrap, "_create_environment_support"),
             patch.object(bootstrap, "_run_pub_get"),
             patch.object(bootstrap, "_run_build_runner") as mock_br,
-            patch.object(bootstrap, "_create_readme"),
+            patch.object(bootstrap, "_append_readme"),
             patch.object(bootstrap, "_format_code"),
             patch.object(bootstrap, "_detect_flutter_version", return_value=None),
         ):
@@ -949,6 +949,23 @@ class TestProjectBootstrap:
             content = (config.project_path / "README.md").read_text()
             assert "make generate" in content
             assert "build_runner" in content
+
+    def test_bootstrap_appends_readme_when_file_already_exists(
+        self, config: Config
+    ) -> None:
+        """bootstrap_project appends flutter-setup section when README.md already exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            original = "# My Existing App\n\nSome existing content.\n"
+            (config.project_path / "README.md").write_text(original)
+
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._append_readme()
+
+            content = (config.project_path / "README.md").read_text()
+            assert "My Existing App" in content
+            assert "## flutter-setup" in content
 
     def test_create_clean_architecture_scaffold(self, config: Config) -> None:
         """Test creating Clean Architecture scaffold."""

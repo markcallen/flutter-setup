@@ -1,5 +1,6 @@
 """Project bootstrapping for Flutter setup."""
 
+import re as _re
 import subprocess
 from pathlib import Path
 
@@ -12,12 +13,69 @@ from .config import Config
 console = Console()
 
 
+def _extract_makefile_target_names(content: str) -> set[str]:
+    """Return set of target names defined in a Makefile."""
+    # Match 'name:' but NOT 'name:=' (variable assignment)
+    names = set(
+        _re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", content, _re.MULTILINE)
+    )
+    names.discard(".PHONY")
+    return names
+
+
+def _is_var_defined_in(line: str, content: str) -> bool:
+    """Return True if line is a variable assignment whose name is already defined in content."""
+    m = _re.match(r"^([A-Z_][A-Z0-9_]*)\s*[:?]?=", line)
+    if not m:
+        return False
+    var_name = m.group(1)
+    return bool(
+        _re.search(rf"^{_re.escape(var_name)}\s*[:?]?=", content, _re.MULTILINE)
+    )
+
+
+def _filter_new_makefile_content(
+    new_content: str, existing_targets: set[str], existing_content: str = ""
+) -> str:
+    """Return parts of new_content not already present in the existing Makefile.
+
+    Target blocks whose names are in existing_targets are skipped. Preamble
+    variable lines are included only when their variable name is not already
+    defined in existing_content — ensuring appended targets that reference
+    $(FLUTTER), $(ANDROID_SDK_ROOT), etc. will find those variables.
+    """
+    blocks = _re.split(
+        r"(?=^[a-zA-Z][a-zA-Z0-9_-]*\s*:(?!=))", new_content, flags=_re.MULTILINE
+    )
+    result = []
+    for block in blocks:
+        if not block.strip():
+            continue
+        first_line = block.splitlines()[0] if block.splitlines() else ""
+        target_match = _re.match(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", first_line)
+        if target_match:
+            target_name = target_match.group(1)
+            if target_name not in existing_targets:
+                result.append(block)
+        else:
+            # Preamble block: include variable lines not already defined
+            missing = [
+                line
+                for line in block.splitlines(keepends=True)
+                if not _is_var_defined_in(line, existing_content)
+            ]
+            if any(ln.strip() for ln in missing):
+                result.append("".join(missing))
+    return "".join(result)
+
+
 class ProjectBootstrap:
     """Bootstraps development environment for Flutter projects."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, force: bool = False) -> None:
         """Initialize ProjectBootstrap."""
         self.config = config
+        self.force = force
         self.home = Path.home()
         self.flutter_root = config.flutter_location
 
@@ -77,8 +135,8 @@ class ProjectBootstrap:
         if self.config.database == "sqlite" or self.config.architecture == "clean":
             self._run_build_runner()
 
-        # Create README
-        self._create_readme()
+        # Create README (append section if file already exists)
+        self._append_readme()
 
         # Format code
         self._format_code()
@@ -135,10 +193,8 @@ class ProjectBootstrap:
             pass
         return None
 
-    def _create_makefile(self) -> None:
-        """Create Makefile with common commands."""
-        # Always lock the project to the Flutter version present at creation time.
-        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+    def _build_makefile_content(self) -> str:
+        """Build and return the Makefile content string."""
         ver = self.config.flutter_version or self._detect_flutter_version()
         flutter_home = str(self.config.flutter_location)
 
@@ -188,7 +244,12 @@ generate:{version_dep}
             android_sdk_header = (
                 "ANDROID_SDK_ROOT ?= $(or $(ANDROID_HOME),/opt/android-sdk)\n"
                 "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
-                "REQUIRED_NDK := 27.0.12077973\n\n"
+                "AVDMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/avdmanager\n"
+                "REQUIRED_NDK := 27.0.12077973\n"
+                "ANDROID_AVD_NAME := flutter_dev\n"
+                "ANDROID_API_LEVEL := 35\n"
+                "ANDROID_AVD_DEVICE := pixel_6\n"
+                "ANDROID_SYSTEM_IMAGE := system-images;android-$(ANDROID_API_LEVEL);google_apis;x86_64\n\n"
             )
             android_sdk_dep = " check-android-sdk"
             android_sdk_target = """
@@ -201,15 +262,45 @@ check-android-sdk:
 \tfi
 
 .PHONY: check-android-sdk
+
+setup-emulator:
+\t@if $(AVDMANAGER) list avd | grep -q "Name: $(ANDROID_AVD_NAME)"; then \\
+\t\techo "Emulator '$(ANDROID_AVD_NAME)' already exists"; \\
+\telse \\
+\t\techo "Installing system image $(ANDROID_SYSTEM_IMAGE)..."; \\
+\t\t$(SDKMANAGER) "$(ANDROID_SYSTEM_IMAGE)"; \\
+\t\techo "Creating emulator '$(ANDROID_AVD_NAME)'..."; \\
+\t\techo no | $(AVDMANAGER) create avd --name "$(ANDROID_AVD_NAME)" --package "$(ANDROID_SYSTEM_IMAGE)" --device "$(ANDROID_AVD_DEVICE)"; \\
+\tfi
+
+.PHONY: setup-emulator
 """
 
-        makefile_content = f"""{version_header}{android_sdk_header}{web_target}run-ios:{version_dep}
-\t{flutter_cmd} run -d ios
+        if "android" in self.config.platforms:
+            run_android_emulator_check = (
+                '\t@if ! adb devices | grep -q "^emulator"; then \\\n'
+                '\t\techo "No emulator running, launching $(ANDROID_AVD_NAME)..."; \\\n'
+                f"\t\t{flutter_cmd} emulators --launch $(ANDROID_AVD_NAME); \\\n"
+                '\t\techo "Waiting for emulator to boot..."; \\\n'
+                '\t\tadb -e wait-for-device && adb -e shell \'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done\'; \\\n'
+                '\t\techo "Emulator ready."; \\\n'
+                "\tfi\n"
+            )
+        else:
+            run_android_emulator_check = ""
 
-run-android:{version_dep}{android_sdk_dep}
-\t{flutter_cmd} run -d android
+        ios_target = ""
+        if "ios" in self.config.platforms:
+            ios_target = f"run-ios:{version_dep}\n\t{flutter_cmd} run -d ios\n\n"
 
-analyze:{version_dep}{codegen_dep}
+        android_target = ""
+        if "android" in self.config.platforms:
+            android_target = (
+                f"run-android:{version_dep}{android_sdk_dep}\n"
+                f"{run_android_emulator_check}\t{flutter_cmd} run -d android\n\n"
+            )
+
+        return f"""{version_header}{android_sdk_header}{web_target}{ios_target}{android_target}analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
 
 test:{version_dep}{codegen_dep}
@@ -225,10 +316,94 @@ upgrade-check:{version_dep}
 \t{flutter_cmd} pub get
 {generate_target}{android_sdk_target}{version_target}"""
 
+    def _create_makefile(self) -> None:
+        """Create Makefile with common commands."""
+        # Always lock the project to the Flutter version present at creation time.
+        # --flutter-version provides an explicit pin; otherwise detect from the SDK.
+        makefile_content = self._build_makefile_content()
+
         with open(self.config.project_path / "Makefile", "w") as f:
             f.write(makefile_content)
 
         console.print("  ✅ Makefile created")
+
+    def _append_vscode_config(self) -> None:
+        """Append VS Code/Cursor configuration files, skipping existing unless --force."""
+        import json
+
+        vscode_dir = self.config.project_path / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+
+        settings = {
+            "dart.flutterHotReloadOnSave": "all",
+            "dart.lineLength": 100,
+            "editor.formatOnSave": True,
+            "editor.defaultFormatter": "Dart-Code.dart-code",
+            "files.exclude": {"**/.dart_tool": True, "**/build": True},
+        }
+        settings_file = vscode_dir / "settings.json"
+        if settings_file.exists() and not self.force:
+            console.print(
+                "  ⚠️  .vscode/settings.json already exists — skipping (use --force to overwrite)"
+            )
+        else:
+            settings_file.write_text(json.dumps(settings, indent=2))
+            console.print("  ✅ .vscode/settings.json written")
+
+        launch_config = {
+            "version": "0.2.0",
+            "configurations": [
+                {"name": "Flutter Debug", "request": "launch", "type": "dart"}
+            ],
+        }
+        launch_file = vscode_dir / "launch.json"
+        if launch_file.exists() and not self.force:
+            console.print(
+                "  ⚠️  .vscode/launch.json already exists — skipping (use --force to overwrite)"
+            )
+        else:
+            launch_file.write_text(json.dumps(launch_config, indent=2))
+            console.print("  ✅ .vscode/launch.json written")
+
+    def _append_makefile(self) -> None:
+        """Append missing Makefile targets, or create Makefile if absent."""
+        new_content = self._build_makefile_content()
+        makefile = self.config.project_path / "Makefile"
+
+        if not makefile.exists():
+            makefile.write_text(new_content)
+            console.print("  ✅ Makefile created")
+            return
+
+        existing = makefile.read_text()
+        existing_targets = _extract_makefile_target_names(existing)
+        to_append = _filter_new_makefile_content(
+            new_content, existing_targets, existing
+        )
+
+        if to_append:
+            with open(makefile, "a") as f:
+                f.write("\n# Added by flutter-setup\n")
+                f.write(to_append)
+            console.print("  ✅ Makefile targets appended")
+        else:
+            console.print(
+                "  ℹ️  Makefile already has all flutter-setup targets — nothing to append"
+            )
+
+    def append_project(self) -> None:
+        """Append flutter-setup tooling to an existing project directory."""
+        if self.config.dry_run:
+            console.print(
+                "[yellow]DRY RUN: Would append flutter-setup tooling[/yellow]"
+            )
+            return
+        console.print("  🔧 Appending flutter-setup tooling...")
+        self._append_vscode_config()
+        self._append_makefile()
+        self._create_cicd()
+        self._append_readme()
+        console.print("  ✅ Tooling appended")
 
     def _patch_android_ndk_version(self) -> None:
         """Pin the Android NDK version in build.gradle.kts.
@@ -675,7 +850,7 @@ class FirebaseNotificationsService {
 
     def _create_cicd(self) -> None:
         """Create CI/CD workflows and configuration."""
-        cicd_generator = CicdGenerator(self.config)
+        cicd_generator = CicdGenerator(self.config, force=self.force)
         cicd_generator.generate_cicd()
 
     def _add_dependencies(self) -> None:
@@ -1035,8 +1210,8 @@ API_URL=https://api.example.com
         except Exception as e:
             console.print(f"  ⚠️  Main.dart modification warning: {e}")
 
-    def _create_readme(self) -> None:
-        """Create README file."""
+    def _build_readme_section(self) -> str:
+        """Return the flutter-setup tooling section for README.md."""
         if "web" in self.config.platforms:
             run_cmd = "make run-chrome      # runs on Chrome"
         elif "ios" in self.config.platforms:
@@ -1049,7 +1224,7 @@ API_URL=https://api.example.com
         codegen_section = ""
         if self.config.database == "sqlite" or self.config.architecture == "clean":
             codegen_section = """
-## Code generation
+### Code generation
 This project uses `build_runner` for code generation (Drift, Riverpod, Freezed).
 Generation runs automatically during setup. To re-run manually:
 ```bash
@@ -1057,55 +1232,73 @@ make generate
 ```
 """
 
-        readme_content = f"""# {self.config.project_name}
+        return f"""## flutter-setup
 
-Flutter app scaffolded for Cursor.
-
-## Quickstart
+### Quickstart
 ```bash
 flutter pub get
 {run_cmd}
 ```
 {codegen_section}
-## Testing
+### Testing
 ```bash
 make test           # unit + widget tests
 make integration    # integration_test/
 ```
 
-## Linting
+### Linting
 ```bash
 make analyze
 ```
 
-## Env vars
+### Env vars
 Copy `.env.example` to `.env` and fill in values. The file is gitignored and
 not bundled as an asset by default, so `dotenv.env['KEY']` returns null until
 you either add `.env` to `pubspec.yaml` assets (and remove it from `.gitignore`),
 or use `--dart-define-from-file=.env.json` for build-time injection.
 
-## Architecture
-Architecture scaffold: `{self.config.architecture}`.
-
-## Persistence
-Local database scaffold: `{self.config.database}`.
-
-## Testing
-Testing starter: `{self.config.testing}`.
-
-## Firebase
-Auth provider: `{self.config.auth_provider}`.
-Cloud database: `{self.config.cloud_database}`.
-Notifications: `{self.config.notifications_provider}`.
-
-When Firebase options are enabled, run `flutterfire configure` for this
-project before using the generated Firebase services.
+### Scaffold configuration
+- Architecture: `{self.config.architecture}`
+- Database: `{self.config.database}`
+- Testing: `{self.config.testing}`
+- Auth provider: `{self.config.auth_provider}`
+- Cloud database: `{self.config.cloud_database}`
+- Notifications: `{self.config.notifications_provider}`
 """
 
-        with open(self.config.project_path / "README.md", "w") as f:
-            f.write(readme_content)
+    def _create_readme(self) -> None:
+        """Create README file."""
+        readme_path = self.config.project_path / "README.md"
+        if readme_path.exists():
+            console.print(
+                "  ⚠️  README.md already exists — skipping (use append to add a section)"
+            )
+            return
 
+        readme_content = (
+            f"# {self.config.project_name}\n\nFlutter app scaffolded for Cursor.\n\n"
+            + self._build_readme_section()
+        )
+        readme_path.write_text(readme_content)
         console.print("  ✅ README created")
+
+    def _append_readme(self) -> None:
+        """Append a flutter-setup section to an existing README, or create one."""
+        readme_path = self.config.project_path / "README.md"
+        section = self._build_readme_section()
+        if not readme_path.exists():
+            readme_path.write_text(f"# {self.config.project_name}\n\n" + section)
+            console.print("  ✅ README created")
+        else:
+            existing = readme_path.read_text()
+            if "## flutter-setup" in existing:
+                console.print(
+                    "  ⚠️  README.md already has a flutter-setup section — skipping"
+                )
+            else:
+                with open(readme_path, "a") as f:
+                    f.write("\n" + section)
+                console.print("  ✅ flutter-setup section appended to README.md")
 
     def _run_pub_get(self) -> None:
         """Run flutter pub get after all pubspec.yaml modifications are complete."""

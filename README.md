@@ -59,16 +59,16 @@ You can run `flutter-setup init` again anytime to update your configuration.
 
 ```bash
 # Create a new Flutter app with iOS, Android, and Web support
-flutter-setup setup MyAwesomeApp ios android web
+flutter-setup create MyAwesomeApp ios android web
 
 # Create a plugin with specific language preferences
-flutter-setup setup MyPlugin --template plugin --ios-language objc --android-language java ios android
+flutter-setup create MyPlugin --template plugin --ios-language objc --android-language java ios android
 
 # Use beta channel and custom organization
-flutter-setup setup MyApp --channel beta --org com.mycompany ios android macos
+flutter-setup create MyApp --channel beta --org com.mycompany ios android macos
 
 # Preview what would happen (dry run)
-flutter-setup setup MyApp --dry-run ios android
+flutter-setup create MyApp --dry-run ios android
 ```
 
 ## Commands
@@ -83,11 +83,25 @@ flutter-setup init --force      # Overwrite existing config
 
 The config file is stored at `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`).
 
-### `setup` - Project Setup
-Set up a new Flutter project:
+### `create` - Create Project
+Create a new Flutter project. Errors if the target directory already exists — use `append` instead:
 
 ```bash
-flutter-setup setup MyApp ios android web
+flutter-setup create MyApp ios android web
+```
+
+### `append` - Add Tooling to Existing Project
+Add flutter-setup tooling (Makefile targets, VS Code config, CI/CD workflows) to a directory that already contains a Flutter project, without re-running `flutter create`:
+
+```bash
+flutter-setup append --dir ./MyApp
+flutter-setup append --dir ./MyApp --force   # overwrite existing config files
+```
+
+If the directory is not yet a Flutter project, `append` requires a project name and runs full setup:
+
+```bash
+flutter-setup append MyApp --dir ./projects
 ```
 
 ## Command Line Options

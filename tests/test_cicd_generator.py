@@ -526,3 +526,44 @@ class TestCicdGenerator:
         assert "ios" in generator.platforms
         assert "android" in generator.platforms
         assert "web" in generator.platforms
+
+
+class TestWriteWorkflowFile:
+    """Tests for _write_workflow_file skip/overwrite behavior."""
+
+    def _make_generator(self, tmp_path: Path, force: bool = False) -> CicdGenerator:
+        config = Config(
+            project_name="myapp",
+            platforms=["ios"],
+            org="com.example",
+            channel="stable",
+            output_dir=tmp_path,
+            template="app",
+            ios_language="swift",
+            android_language="kotlin",
+            flutter_update_mode="skip",
+            dry_run=False,
+            verbose=False,
+            flutter_location=tmp_path / "flutter",
+        )
+        return CicdGenerator(config, force=force)
+
+    def test_skips_existing_file_when_force_false(self, tmp_path: Path) -> None:
+        generator = self._make_generator(tmp_path, force=False)
+        target = tmp_path / "existing.yml"
+        target.write_text("original")
+        generator._write_workflow_file(target, "new content")
+        assert target.read_text() == "original"
+
+    def test_overwrites_existing_file_when_force_true(self, tmp_path: Path) -> None:
+        generator = self._make_generator(tmp_path, force=True)
+        target = tmp_path / "existing.yml"
+        target.write_text("original")
+        generator._write_workflow_file(target, "new content")
+        assert target.read_text() == "new content"
+
+    def test_creates_file_when_absent(self, tmp_path: Path) -> None:
+        generator = self._make_generator(tmp_path, force=False)
+        target = tmp_path / "new.yml"
+        generator._write_workflow_file(target, "content")
+        assert target.read_text() == "content"

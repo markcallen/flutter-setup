@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code for working in this repository.
 
+## Before Starting Work
+
+Run `make setup` before making any code changes. This installs dependencies, sets up the local dev environment, and installs pre-commit hooks:
+
+```bash
+make setup
+```
+
+This must be run once per worktree or fresh checkout. Without it, pre-commit hooks won't run and the linter/formatter won't be available.
+
 ## Repository Facts
 
 Use this section for durable repo-specific facts that agents repeatedly need. Prefer facts stored here over re-deriving them with shell commands on every task.

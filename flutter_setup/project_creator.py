@@ -25,15 +25,18 @@ class ProjectCreator:
             console.print("[yellow]DRY RUN: Would create Flutter project[/yellow]")
             return
 
-        # Check if a Flutter project already exists (pubspec.yaml is the canonical marker)
+        # Skip only when a Flutter project is already present (pubspec.yaml exists).
+        # A pre-existing directory without pubspec.yaml (e.g. a repo cloned before
+        # flutter-setup was run) is a valid target: flutter create will add the
+        # missing scaffold files without touching files that are already there.
         if (self.config.project_path / "pubspec.yaml").exists():
             console.print(
-                f"  ⚠️  Flutter project '{self.config.project_path}' already exists—skipping create."
+                f"  ⚠️  Flutter project already exists at '{self.config.project_path}'—skipping create."
             )
             return
 
-        # Create output directory
-        self.config.output_dir.mkdir(parents=True, exist_ok=True)
+        # Create project directory (and parents) if not already present
+        self.config.project_path.mkdir(parents=True, exist_ok=True)
 
         # Build flutter create command
         create_cmd = self._build_create_command()

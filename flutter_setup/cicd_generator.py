@@ -14,9 +14,10 @@ console = Console()
 class CicdGenerator:
     """Generates CI/CD workflows and configuration for Flutter projects."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, force: bool = False) -> None:
         """Initialize CicdGenerator."""
         self.config = config
+        self.force = force
         self.project_path = config.project_path
         self.project_name = config.project_name
         self.package_name = config.package_name
@@ -67,6 +68,15 @@ class CicdGenerator:
                 f"  ⚠️  Error detecting Flutter version: {e}, using '3.38.0' as default"
             )
             return "3.38.0"
+
+    def _write_workflow_file(self, filepath: Path, content: str) -> None:
+        """Write a workflow file, skipping if it exists and force is False."""
+        if filepath.exists() and not self.force:
+            console.print(
+                f"  ⚠️  {filepath.name} already exists — skipping (use --force to overwrite)"
+            )
+            return
+        filepath.write_text(content)
 
     def _codegen_step(self) -> str:
         """Return the build_runner code generation step for workflows that need it."""
@@ -158,7 +168,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "lint.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_format_workflow(self, workflows_dir: Path) -> None:
         """Generate format workflow for dart format."""
@@ -214,7 +224,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "format.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_test_workflow(self, workflows_dir: Path) -> None:
         """Generate test workflow."""
@@ -266,7 +276,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "test.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_build_workflows(self, workflows_dir: Path) -> None:
         """Generate build workflows for enabled platforms."""
@@ -327,7 +337,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-ios.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_android_build_workflow(self, workflows_dir: Path) -> None:
         """Generate Android build workflow."""
@@ -389,7 +399,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-android.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_web_build_workflow(self, workflows_dir: Path) -> None:
         """Generate Web build workflow."""
@@ -435,7 +445,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-web.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_macos_build_workflow(self, workflows_dir: Path) -> None:
         """Generate macOS build workflow."""
@@ -481,7 +491,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-macos.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_linux_build_workflow(self, workflows_dir: Path) -> None:
         """Generate Linux build workflow."""
@@ -539,7 +549,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-linux.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_windows_build_workflow(self, workflows_dir: Path) -> None:
         """Generate Windows build workflow."""
@@ -585,7 +595,7 @@ jobs:
 """
 
         workflow_file = workflows_dir / "build-windows.yml"
-        workflow_file.write_text(workflow_content)
+        self._write_workflow_file(workflow_file, workflow_content)
 
     def _generate_dependabot(self, github_dir: Path) -> None:
         """Generate dependabot.yml configuration."""
@@ -618,7 +628,7 @@ updates:
 """
 
         dependabot_file = github_dir / "dependabot.yml"
-        dependabot_file.write_text(dependabot_content)
+        self._write_workflow_file(dependabot_file, dependabot_content)
 
     def _generate_setup_docs(self, github_dir: Path) -> None:
         """Generate CI/CD setup documentation."""
@@ -764,7 +774,7 @@ All build workflows can be triggered manually via **Actions → [Workflow Name] 
 """
 
         docs_file = github_dir / "CI_CD_SETUP.md"
-        docs_file.write_text(docs_content)
+        self._write_workflow_file(docs_file, docs_content)
 
     def _generate_platform_notes(self) -> str:
         """Generate platform-specific notes for the documentation."""
