@@ -56,6 +56,9 @@ class ProjectBootstrap:
         # Add dependencies
         self._add_dependencies()
 
+        # Update pubspec description (flutter create leaves a generic placeholder)
+        self._update_pubspec_description()
+
         # Create environment support (.env file + gitignore entry; NOT added to assets)
         self._create_environment_support()
 
@@ -68,6 +71,11 @@ class ProjectBootstrap:
         # packages added by yaml.dump-based edits (integration_test, .env asset,
         # flutter version pin) are resolved before the user's first make target.
         self._run_pub_get()
+
+        # Run build_runner for projects that require code generation (Drift,
+        # Riverpod, Freezed) so the project compiles immediately after setup.
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
+            self._run_build_runner()
 
         # Create README
         self._create_readme()
@@ -162,7 +170,7 @@ check-flutter-version:
 
         generate_target = ""
         codegen_dep = ""
-        if self.config.database == "sqlite":
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
             generate_target = f"""
 generate:{version_dep}
 \tdart run build_runner build --delete-conflicting-outputs
@@ -410,23 +418,40 @@ linter:
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
 
-        (src_dir / "app" / "app.dart").write_text(
-            """import 'package:flutter/material.dart';
+        (src_dir / "app" / "router.dart").write_text(
+            """import 'package:go_router/go_router.dart';
 
 import '../features/home/presentation/home_screen.dart';
 
-class App extends StatelessWidget {
-  const App({super.key});
+final router = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomeScreen(),
+    ),
+  ],
+);
+"""
+        )
+
+        safe_title = self.config.project_name.replace("'", "\\'")
+        (src_dir / "app" / "app.dart").write_text(
+            f"""import 'package:flutter/material.dart';
+
+import 'router.dart';
+
+class App extends StatelessWidget {{
+  const App({{super.key}});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter App',
+  Widget build(BuildContext context) {{
+    return MaterialApp.router(
+      title: '{safe_title}',
       theme: ThemeData(useMaterial3: true),
-      home: const HomeScreen(),
+      routerConfig: router,
     );
-  }
-}
+  }}
+}}
 """
         )
 
@@ -482,7 +507,39 @@ Future<void> main() async {{
 }}
 """)
 
+        self._create_assets_scaffold()
+
         console.print("  ✅ Clean Architecture scaffold created")
+
+    def _create_assets_scaffold(self) -> None:
+        """Create assets/ directories and declare them in pubspec.yaml.
+
+        Uses .gitkeep sentinels so the empty directories are tracked in git.
+        """
+        assets_root = self.config.project_path / "assets"
+        asset_dirs = [
+            assets_root / "images",
+            assets_root / "fonts",
+        ]
+        for asset_dir in asset_dirs:
+            asset_dir.mkdir(parents=True, exist_ok=True)
+            (asset_dir / ".gitkeep").touch()
+
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            flutter_section = pubspec.setdefault("flutter", {})
+            assets = flutter_section.setdefault("assets", [])
+            if "assets/images/" not in assets:
+                assets.append("assets/images/")
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+            console.print("  ✅ Assets directories created")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to declare assets in pubspec.yaml: {e}")
 
     def _create_sqlite_scaffold(self) -> None:
         """Create a Drift/SQLite starter database scaffold."""
@@ -670,7 +727,18 @@ class FirebaseNotificationsService {
         dependencies = ["flutter_dotenv"]
 
         if self.config.architecture == "clean":
-            dependencies.append("flutter_riverpod")
+            dependencies.extend(
+                [
+                    "flutter_riverpod",
+                    "riverpod_annotation",
+                    "go_router",
+                    "freezed_annotation",
+                    "json_annotation",
+                    "collection",
+                    "intl",
+                    "uuid",
+                ]
+            )
 
         if self.config.database == "sqlite":
             dependencies.extend(
@@ -695,6 +763,14 @@ class FirebaseNotificationsService {
         """Return dev dependencies required by selected scaffolds."""
         dependencies = ["flutter_lints"]
 
+        if self.config.architecture == "clean":
+            # build_runner is required to run riverpod_generator, freezed, and
+            # json_serializable — add it here so clean-arch projects without
+            # sqlite still get code generation support.
+            dependencies.extend(
+                ["riverpod_generator", "freezed", "json_serializable", "build_runner"]
+            )
+
         if self.config.database == "sqlite":
             dependencies.extend(["drift_dev", "build_runner"])
 
@@ -702,6 +778,32 @@ class FirebaseNotificationsService {
             dependencies.append("mocktail")
 
         return dependencies
+
+    _GENERIC_PUBSPEC_DESCRIPTION = "A new Flutter project."
+
+    def _update_pubspec_description(self) -> None:
+        """Replace the generic flutter-create description in pubspec.yaml.
+
+        Only overwrites the known placeholder left by `flutter create` so that
+        re-running bootstrap does not clobber a description the developer has
+        already customised.
+        """
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            if pubspec.get("description") != self._GENERIC_PUBSPEC_DESCRIPTION:
+                return
+            pubspec["description"] = (
+                f"A {self.config.project_name} Flutter application."
+            )
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+            console.print("  ✅ pubspec description updated")
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to update pubspec description: {e}")
 
     def _pin_flutter_sdk_version(self, version: str) -> None:
         """Set the flutter SDK constraint in pubspec.yaml to >= the given version."""
@@ -766,7 +868,7 @@ class FirebaseNotificationsService {
 
         flutter pub add can silently fail in some environments; this guarantees
         the entry is present regardless. The version constraint is derived from
-        the runtime drift package so the code-generator major version always matches.
+        the runtime drift package so the code-generator version always matches.
         """
         import re
 
@@ -778,11 +880,13 @@ class FirebaseNotificationsService {
                 pubspec = yaml.safe_load(f) or {}
             dev_deps = pubspec.setdefault("dev_dependencies", {})
             if "drift_dev" not in dev_deps:
-                # Pin drift_dev to the same major version as the runtime drift
-                # package: a major-version mismatch causes incompatible codegen.
+                # Pin drift_dev to the same full version as the runtime drift
+                # package: drift_dev must match drift's minor version since each
+                # minor release may add new codegen features the old generator
+                # doesn't know about. e.g. drift: ^2.31.0 -> drift_dev: ^2.31.0
                 drift_constraint = pubspec.get("dependencies", {}).get("drift", "")
-                match = re.match(r"[\^~]?(\d+)", str(drift_constraint))
-                version = f"^{match.group(1)}.0.0" if match else "any"
+                match = re.match(r"[\^~]?(\d+\.\d+\.\d+)", str(drift_constraint))
+                version = f"^{match.group(1)}" if match else "any"
                 dev_deps["drift_dev"] = version
                 with open(pubspec_path, "w") as f:
                     yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
@@ -942,6 +1046,17 @@ API_URL=https://api.example.com
         else:
             run_cmd = "flutter run"
 
+        codegen_section = ""
+        if self.config.database == "sqlite" or self.config.architecture == "clean":
+            codegen_section = """
+## Code generation
+This project uses `build_runner` for code generation (Drift, Riverpod, Freezed).
+Generation runs automatically during setup. To re-run manually:
+```bash
+make generate
+```
+"""
+
         readme_content = f"""# {self.config.project_name}
 
 Flutter app scaffolded for Cursor.
@@ -951,7 +1066,7 @@ Flutter app scaffolded for Cursor.
 flutter pub get
 {run_cmd}
 ```
-
+{codegen_section}
 ## Testing
 ```bash
 make test           # unit + widget tests
@@ -1004,6 +1119,37 @@ project before using the generated Firebase services.
             console.print("  ✅ flutter pub get completed")
         except Exception as e:
             console.print(f"  ⚠️  flutter pub get warning: {e}")
+
+    def _run_build_runner(self) -> None:
+        """Run build_runner to generate code for Drift, Riverpod, and Freezed.
+
+        Projects using sqlite or clean architecture include code-generated files
+        (*.g.dart, *.freezed.dart). Without this step the project will not
+        compile on first checkout.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    str(self.flutter_root / "bin" / "dart"),
+                    "run",
+                    "build_runner",
+                    "build",
+                    "--delete-conflicting-outputs",
+                ],
+                cwd=self.config.project_path,
+                check=False,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                console.print("  ✅ Code generation completed (build_runner)")
+            else:
+                stderr = result.stderr.decode(errors="replace") if result.stderr else ""
+                console.print(
+                    f"  ⚠️  build_runner exited with code {result.returncode}"
+                    + (f": {stderr.strip()}" if stderr.strip() else "")
+                )
+        except Exception as e:
+            console.print(f"  ⚠️  build_runner warning: {e}")
 
     def _format_code(self) -> None:
         """Format the generated code."""
