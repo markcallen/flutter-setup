@@ -968,6 +968,23 @@ class TestProjectBootstrap:
             assert "ConsumerWidget" not in app_content
             assert "WidgetRef" not in app_content
 
+    def test_clean_architecture_app_title_uses_project_name(
+        self, config: Config
+    ) -> None:
+        """Test that app.dart uses the project name as the MaterialApp title."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert f"title: '{config.project_name}'" in app_content
+            assert "Flutter App" not in app_content
+
     def test_clean_architecture_home_screen_uses_stateless_widget(
         self, config: Config
     ) -> None:

@@ -416,22 +416,22 @@ linter:
             directory.mkdir(parents=True, exist_ok=True)
 
         (src_dir / "app" / "app.dart").write_text(
-            """import 'package:flutter/material.dart';
+            f"""import 'package:flutter/material.dart';
 
 import '../features/home/presentation/home_screen.dart';
 
-class App extends StatelessWidget {
-  const App({super.key});
+class App extends StatelessWidget {{
+  const App({{super.key}});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) {{
     return MaterialApp(
-      title: 'Flutter App',
+      title: '{self.config.project_name}',
       theme: ThemeData(useMaterial3: true),
       home: const HomeScreen(),
     );
-  }
-}
+  }}
+}}
 """
         )
 
