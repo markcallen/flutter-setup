@@ -418,20 +418,36 @@ linter:
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
 
+        (src_dir / "app" / "router.dart").write_text(
+            """import 'package:go_router/go_router.dart';
+
+import '../features/home/presentation/home_screen.dart';
+
+final router = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomeScreen(),
+    ),
+  ],
+);
+"""
+        )
+
         (src_dir / "app" / "app.dart").write_text(
             f"""import 'package:flutter/material.dart';
 
-import '../features/home/presentation/home_screen.dart';
+import 'router.dart';
 
 class App extends StatelessWidget {{
   const App({{super.key}});
 
   @override
   Widget build(BuildContext context) {{
-    return MaterialApp(
+    return MaterialApp.router(
       title: '{self.config.project_name}',
       theme: ThemeData(useMaterial3: true),
-      home: const HomeScreen(),
+      routerConfig: router,
     );
   }}
 }}

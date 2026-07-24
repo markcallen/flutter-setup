@@ -1007,7 +1007,39 @@ class TestProjectBootstrap:
             ).read_text()
             assert "StatelessWidget" in screen_content
             assert "ConsumerWidget" not in screen_content
-            assert "WidgetRef" not in screen_content
+
+    def test_clean_architecture_uses_go_router(self, config: Config) -> None:
+        """Test that app.dart uses MaterialApp.router with GoRouter."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert "MaterialApp.router" in app_content
+            assert "routerConfig: router" in app_content
+            assert "MaterialApp(" not in app_content
+
+    def test_clean_architecture_creates_router_file(self, config: Config) -> None:
+        """Test that router.dart is generated with a GoRouter and home route."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            router_path = config.project_path / "lib" / "src" / "app" / "router.dart"
+            assert router_path.exists()
+            router_content = router_path.read_text()
+            assert "GoRouter" in router_content
+            assert "HomeScreen" in router_content
+            assert "path: '/'" in router_content
+            assert "WidgetRef" not in router_content
 
     def test_create_sqlite_scaffold(self, config: Config) -> None:
         """Test creating Drift SQLite scaffold."""
