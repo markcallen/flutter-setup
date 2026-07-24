@@ -95,6 +95,20 @@ class TestProjectBootstrap:
             assert "run-chrome:" not in content
             assert "analyze:" in content
 
+    def test_create_makefile_generates_target_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that make generate target is created for clean architecture projects."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            assert "generate:" in content
+            assert "build_runner" in content
+
     def test_check_flutter_version_target_verifies_version(
         self, config: Config
     ) -> None:
@@ -373,7 +387,7 @@ class TestProjectBootstrap:
             assert "UnimplementedError" in content
 
     def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
-        """Test that drift_dev is written with a version-pinned constraint."""
+        """Test that drift_dev is written with a full-version-pinned constraint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.database = "sqlite"
@@ -387,9 +401,27 @@ class TestProjectBootstrap:
             bootstrap._add_drift_dev_to_pubspec()
             content = yaml.safe_load(pubspec_path.read_text())
             assert "drift_dev" in content["dev_dependencies"]
-            # Must not use unconstrained 'any' — major version must match runtime drift
-            assert content["dev_dependencies"]["drift_dev"] != "any"
-            assert content["dev_dependencies"]["drift_dev"].startswith("^2")
+            # drift_dev must match drift's full version, not just the major.
+            # drift: ^2.31.0 -> drift_dev: ^2.31.0 (not ^2.0.0)
+            assert content["dev_dependencies"]["drift_dev"] == "^2.31.0"
+
+    def test_add_drift_dev_to_pubspec_major_only_falls_back(
+        self, config: Config
+    ) -> None:
+        """Test that drift_dev falls back to 'any' when drift constraint has no full version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndependencies:\n  drift: any\n"
+                "dev_dependencies:\n  build_runner: ^2.9.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["dev_dependencies"]["drift_dev"] == "any"
 
     def test_add_drift_dev_to_pubspec_skips_if_already_present(
         self, config: Config
@@ -451,6 +483,109 @@ class TestProjectBootstrap:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = Exception("Failed")
             bootstrap._run_pub_get()  # Should not raise, just warn
+
+    def test_run_build_runner(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner calls dart run build_runner build."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            bootstrap._run_build_runner()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "build_runner" in args
+            assert "build" in args
+            assert "--delete-conflicting-outputs" in args
+            assert mock_run.call_args[1]["cwd"] == config.project_path
+
+    def test_run_build_runner_nonzero_exit_warns(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner warns when build_runner exits non-zero."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=1, stderr=b"some error")
+            bootstrap._run_build_runner()  # Should not raise, just warn
+
+    def test_run_build_runner_failure(
+        self, bootstrap: ProjectBootstrap, config: Config
+    ) -> None:
+        """Test that _run_build_runner handles subprocess exceptions gracefully."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Failed")
+            bootstrap._run_build_runner()  # Should not raise, just warn
+
+    def test_bootstrap_project_runs_build_runner_for_sqlite(
+        self, config: Config
+    ) -> None:
+        """Test that bootstrap_project calls _run_build_runner for sqlite projects."""
+        config.database = "sqlite"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_append_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_called_once()
+
+    def test_bootstrap_project_runs_build_runner_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that bootstrap_project calls _run_build_runner for clean architecture."""
+        config.architecture = "clean"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_append_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_called_once()
+
+    def test_bootstrap_project_skips_build_runner_for_basic_no_db(
+        self, config: Config
+    ) -> None:
+        """Test that build_runner is not invoked for basic arch with no database."""
+        config.architecture = "basic"
+        config.database = "none"
+        bootstrap = ProjectBootstrap(config)
+        with (
+            patch.object(bootstrap, "_create_vscode_config"),
+            patch.object(bootstrap, "_create_makefile"),
+            patch.object(bootstrap, "_create_test_structure"),
+            patch.object(bootstrap, "_create_analysis_options"),
+            patch.object(bootstrap, "_create_architecture_scaffold"),
+            patch.object(bootstrap, "_create_cicd"),
+            patch.object(bootstrap, "_add_dependencies"),
+            patch.object(bootstrap, "_create_environment_support"),
+            patch.object(bootstrap, "_run_pub_get"),
+            patch.object(bootstrap, "_run_build_runner") as mock_br,
+            patch.object(bootstrap, "_append_readme"),
+            patch.object(bootstrap, "_format_code"),
+            patch.object(bootstrap, "_detect_flutter_version", return_value=None),
+        ):
+            bootstrap.bootstrap_project()
+            mock_br.assert_not_called()
 
     def test_add_integration_test_sdk_dependency_no_pubspec(
         self, bootstrap: ProjectBootstrap, config: Config
@@ -784,6 +919,36 @@ class TestProjectBootstrap:
             assert "make integration" in content
             assert "make analyze" in content
             assert ".env" in content
+            # basic arch + no db should NOT include the codegen section
+            assert "make generate" not in content
+
+    def test_create_readme_includes_codegen_section_for_sqlite(
+        self, config: Config
+    ) -> None:
+        """Test that the README includes the code generation section for sqlite projects."""
+        config.database = "sqlite"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_readme()
+            content = (config.project_path / "README.md").read_text()
+            assert "make generate" in content
+            assert "build_runner" in content
+
+    def test_create_readme_includes_codegen_section_for_clean_arch(
+        self, config: Config
+    ) -> None:
+        """Test that the README includes the code generation section for clean arch."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_readme()
+            content = (config.project_path / "README.md").read_text()
+            assert "make generate" in content
+            assert "build_runner" in content
 
     def test_bootstrap_appends_readme_when_file_already_exists(
         self, config: Config
@@ -842,6 +1007,41 @@ class TestProjectBootstrap:
             assert "ConsumerWidget" not in app_content
             assert "WidgetRef" not in app_content
 
+    def test_clean_architecture_app_title_uses_project_name(
+        self, config: Config
+    ) -> None:
+        """Test that app.dart uses the project name as the MaterialApp title."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert f"title: '{config.project_name}'" in app_content
+            assert "Flutter App" not in app_content
+
+    def test_clean_architecture_app_title_escapes_apostrophe(
+        self, config: Config
+    ) -> None:
+        """Test that apostrophes in the project name are escaped in app.dart."""
+        config.project_name = "Sam's App"
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            # The apostrophe must be escaped so the Dart string is valid
+            assert r"Sam\'s App" in app_content
+
     def test_clean_architecture_home_screen_uses_stateless_widget(
         self, config: Config
     ) -> None:
@@ -864,7 +1064,86 @@ class TestProjectBootstrap:
             ).read_text()
             assert "StatelessWidget" in screen_content
             assert "ConsumerWidget" not in screen_content
-            assert "WidgetRef" not in screen_content
+
+    def test_clean_architecture_uses_go_router(self, config: Config) -> None:
+        """Test that app.dart uses MaterialApp.router with GoRouter."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            app_content = (
+                config.project_path / "lib" / "src" / "app" / "app.dart"
+            ).read_text()
+            assert "MaterialApp.router" in app_content
+            assert "routerConfig: router" in app_content
+            assert "MaterialApp(" not in app_content
+
+    def test_clean_architecture_creates_router_file(self, config: Config) -> None:
+        """Test that router.dart is generated with a GoRouter and home route."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            router_path = config.project_path / "lib" / "src" / "app" / "router.dart"
+            assert router_path.exists()
+            router_content = router_path.read_text()
+            assert "GoRouter" in router_content
+            assert "HomeScreen" in router_content
+            assert "path: '/'" in router_content
+            assert "WidgetRef" not in router_content
+
+    def test_create_assets_scaffold_creates_directories(self, config: Config) -> None:
+        """Test that assets directories are created with .gitkeep sentinels."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            assert (config.project_path / "assets" / "images").is_dir()
+            assert (config.project_path / "assets" / "fonts").is_dir()
+            assert (config.project_path / "assets" / "images" / ".gitkeep").exists()
+            assert (config.project_path / "assets" / "fonts" / ".gitkeep").exists()
+
+    def test_create_assets_scaffold_declares_in_pubspec(self, config: Config) -> None:
+        """Test that assets/images/ is declared in pubspec.yaml flutter.assets."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\nflutter:\n  uses-material-design: true\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_architecture_scaffold()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert "assets/images/" in pubspec["flutter"]["assets"]
+
+    def test_create_assets_scaffold_idempotent(self, config: Config) -> None:
+        """Test that calling _create_assets_scaffold twice does not duplicate entries."""
+        config.architecture = "clean"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            (config.project_path / "lib").mkdir(parents=True, exist_ok=True)
+            (config.project_path / "lib" / "main.dart").write_text("void main() {}")
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\nflutter:\n  uses-material-design: true\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_assets_scaffold()
+            bootstrap._create_assets_scaffold()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["flutter"]["assets"].count("assets/images/") == 1
 
     def test_create_sqlite_scaffold(self, config: Config) -> None:
         """Test creating Drift SQLite scaffold."""
@@ -931,15 +1210,55 @@ class TestProjectBootstrap:
         runtime_dependencies = bootstrap._runtime_dependencies()
         dev_dependencies = bootstrap._dev_dependencies()
 
+        # clean arch runtime packages
         assert "flutter_riverpod" in runtime_dependencies
+        assert "riverpod_annotation" in runtime_dependencies
+        assert "go_router" in runtime_dependencies
+        assert "freezed_annotation" in runtime_dependencies
+        assert "json_annotation" in runtime_dependencies
+        assert "collection" in runtime_dependencies
+        assert "intl" in runtime_dependencies
+        assert "uuid" in runtime_dependencies
+        # sqlite packages
         assert "drift" in runtime_dependencies
+        # firebase packages
         assert "firebase_core" in runtime_dependencies
         assert "firebase_auth" in runtime_dependencies
         assert "cloud_firestore" in runtime_dependencies
         assert "firebase_messaging" in runtime_dependencies
+        # clean arch dev packages
+        assert "riverpod_generator" in dev_dependencies
+        assert "freezed" in dev_dependencies
+        assert "json_serializable" in dev_dependencies
+        # sqlite dev packages
         assert "drift_dev" in dev_dependencies
         assert "build_runner" in dev_dependencies
         assert "mocktail" in dev_dependencies
+
+    def test_dependency_selection_basic_architecture(self, config: Config) -> None:
+        """Test that clean-arch packages are absent for basic architecture."""
+        config.architecture = "basic"
+        bootstrap = ProjectBootstrap(config)
+
+        runtime_dependencies = bootstrap._runtime_dependencies()
+        dev_dependencies = bootstrap._dev_dependencies()
+
+        assert "go_router" not in runtime_dependencies
+        assert "riverpod_annotation" not in runtime_dependencies
+        assert "freezed_annotation" not in runtime_dependencies
+        assert "riverpod_generator" not in dev_dependencies
+        assert "freezed" not in dev_dependencies
+        assert "json_serializable" not in dev_dependencies
+
+    def test_clean_arch_without_sqlite_includes_build_runner(
+        self, config: Config
+    ) -> None:
+        """build_runner must be in dev deps for clean arch even without sqlite."""
+        config.architecture = "clean"
+        config.database = "none"
+        bootstrap = ProjectBootstrap(config)
+        dev_deps = bootstrap._dev_dependencies()
+        assert "build_runner" in dev_deps
 
     # --- _detect_flutter_version ---
 
@@ -977,6 +1296,46 @@ class TestProjectBootstrap:
         """Returns None when subprocess raises."""
         with patch("subprocess.run", side_effect=OSError("not found")):
             assert bootstrap._detect_flutter_version() is None
+
+    # --- _update_pubspec_description ---
+
+    def test_update_pubspec_description(self, config: Config) -> None:
+        """Test that pubspec description is updated to include the project name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: testapp\ndescription: A new Flutter project.\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert config.project_name in pubspec["description"]
+            assert "A new Flutter project." != pubspec["description"]
+
+    def test_update_pubspec_description_no_pubspec(self, config: Config) -> None:
+        """Test that missing pubspec.yaml is handled gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()  # should not raise
+
+    def test_update_pubspec_description_does_not_overwrite_custom(
+        self, config: Config
+    ) -> None:
+        """Test that a developer-customised description is not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            custom = "My custom project description."
+            pubspec_path.write_text(f"name: testapp\ndescription: {custom}\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._update_pubspec_description()
+            pubspec = yaml.safe_load(pubspec_path.read_text())
+            assert pubspec["description"] == custom
 
     # --- _pin_flutter_sdk_version ---
 
