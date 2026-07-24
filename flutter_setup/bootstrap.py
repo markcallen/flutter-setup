@@ -766,7 +766,7 @@ class FirebaseNotificationsService {
 
         flutter pub add can silently fail in some environments; this guarantees
         the entry is present regardless. The version constraint is derived from
-        the runtime drift package so the code-generator major version always matches.
+        the runtime drift package so the code-generator version always matches.
         """
         import re
 
@@ -778,11 +778,13 @@ class FirebaseNotificationsService {
                 pubspec = yaml.safe_load(f) or {}
             dev_deps = pubspec.setdefault("dev_dependencies", {})
             if "drift_dev" not in dev_deps:
-                # Pin drift_dev to the same major version as the runtime drift
-                # package: a major-version mismatch causes incompatible codegen.
+                # Pin drift_dev to the same full version as the runtime drift
+                # package: drift_dev must match drift's minor version since each
+                # minor release may add new codegen features the old generator
+                # doesn't know about. e.g. drift: ^2.31.0 -> drift_dev: ^2.31.0
                 drift_constraint = pubspec.get("dependencies", {}).get("drift", "")
-                match = re.match(r"[\^~]?(\d+)", str(drift_constraint))
-                version = f"^{match.group(1)}.0.0" if match else "any"
+                match = re.match(r"[\^~]?(\d+\.\d+\.\d+)", str(drift_constraint))
+                version = f"^{match.group(1)}" if match else "any"
                 dev_deps["drift_dev"] = version
                 with open(pubspec_path, "w") as f:
                     yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)

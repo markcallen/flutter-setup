@@ -373,7 +373,7 @@ class TestProjectBootstrap:
             assert "UnimplementedError" in content
 
     def test_add_drift_dev_to_pubspec(self, config: Config) -> None:
-        """Test that drift_dev is written with a version-pinned constraint."""
+        """Test that drift_dev is written with a full-version-pinned constraint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.database = "sqlite"
@@ -387,9 +387,27 @@ class TestProjectBootstrap:
             bootstrap._add_drift_dev_to_pubspec()
             content = yaml.safe_load(pubspec_path.read_text())
             assert "drift_dev" in content["dev_dependencies"]
-            # Must not use unconstrained 'any' — major version must match runtime drift
-            assert content["dev_dependencies"]["drift_dev"] != "any"
-            assert content["dev_dependencies"]["drift_dev"].startswith("^2")
+            # drift_dev must match drift's full version, not just the major.
+            # drift: ^2.31.0 -> drift_dev: ^2.31.0 (not ^2.0.0)
+            assert content["dev_dependencies"]["drift_dev"] == "^2.31.0"
+
+    def test_add_drift_dev_to_pubspec_major_only_falls_back(
+        self, config: Config
+    ) -> None:
+        """Test that drift_dev falls back to 'any' when drift constraint has no full version."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndependencies:\n  drift: any\n"
+                "dev_dependencies:\n  build_runner: ^2.9.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._add_drift_dev_to_pubspec()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["dev_dependencies"]["drift_dev"] == "any"
 
     def test_add_drift_dev_to_pubspec_skips_if_already_present(
         self, config: Config
