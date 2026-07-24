@@ -13,8 +13,8 @@ sudo uv pip install -e . --system --break-system-packages
 # testing starter, auth, cloud database, notifications.
 printf "\n\ncom.smoke\nbasic\nnone\nstandard\nnone\nnone\nnone\n" | flutter-setup init
 
-# Setup with --flutter-update skip to use the pre-installed SDK
-flutter-setup setup smoke_app linux --flutter-update skip --verbose
+# Create project with --flutter-update skip to use the pre-installed SDK
+flutter-setup create smoke_app linux --flutter-update skip --verbose
 
 # Verify Project creation
 echo "📂 Verifying Project: smoke_app"

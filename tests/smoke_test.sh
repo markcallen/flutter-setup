@@ -10,9 +10,8 @@ sudo uv pip install -e . --system --break-system-packages
 # testing starter, auth, cloud database, notifications.
 printf "\n\ncom.smoke\nbasic\nnone\nstandard\nnone\nnone\nnone\n" | flutter-setup init
 
-# Run setup
-# This will install prerequisites (using sudo) and Flutter SDK
-flutter-setup setup smoke_app linux --verbose
+# Create project — installs prerequisites (using sudo) and Flutter SDK
+flutter-setup create smoke_app linux --verbose
 
 # Verify Flutter installation
 FLUTTER_PATH="$HOME/development/flutter/bin"
