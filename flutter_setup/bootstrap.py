@@ -297,7 +297,7 @@ setup-emulator:
         if "android" in self.config.platforms:
             android_target = (
                 f"run-android:{version_dep}{android_sdk_dep}\n"
-                f"{run_android_emulator_check}\t{flutter_cmd} run -d android\n\n"
+                f"{run_android_emulator_check}\t{flutter_cmd} run -d emulator\n\n"
             )
 
         return f"""{version_header}{android_sdk_header}{web_target}{ios_target}{android_target}analyze:{version_dep}{codegen_dep}
