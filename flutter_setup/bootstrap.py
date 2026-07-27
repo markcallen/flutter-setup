@@ -246,6 +246,8 @@ generate:{version_dep}
                 "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
                 "AVDMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/avdmanager\n"
                 "REQUIRED_NDK := 27.0.12077973\n"
+                "REQUIRED_BUILD_TOOLS := 34.0.0\n"
+                "REQUIRED_CMAKE := 3.22.1\n"
                 "ANDROID_AVD_NAME := flutter_dev\n"
                 "ANDROID_API_LEVEL := 35\n"
                 "ANDROID_AVD_DEVICE := pixel_6\n"
@@ -259,6 +261,18 @@ check-android-sdk:
 \t\t$(SDKMANAGER) "ndk;$(REQUIRED_NDK)"; \\
 \telse \\
 \t\techo "NDK $(REQUIRED_NDK) ok"; \\
+\tfi
+\t@if [ ! -d "$(ANDROID_SDK_ROOT)/build-tools/$(REQUIRED_BUILD_TOOLS)" ]; then \\
+\t\techo "Build-Tools $(REQUIRED_BUILD_TOOLS) missing, installing..."; \\
+\t\t$(SDKMANAGER) "build-tools;$(REQUIRED_BUILD_TOOLS)"; \\
+\telse \\
+\t\techo "Build-Tools $(REQUIRED_BUILD_TOOLS) ok"; \\
+\tfi
+\t@if [ ! -d "$(ANDROID_SDK_ROOT)/cmake/$(REQUIRED_CMAKE)" ]; then \\
+\t\techo "CMake $(REQUIRED_CMAKE) missing, installing..."; \\
+\t\t$(SDKMANAGER) "cmake;$(REQUIRED_CMAKE)"; \\
+\telse \\
+\t\techo "CMake $(REQUIRED_CMAKE) ok"; \\
 \tfi
 
 .PHONY: check-android-sdk

@@ -768,6 +768,10 @@ class TestProjectBootstrap:
             assert "check-android-sdk" in content
             assert "ANDROID_SDK_ROOT" in content
             assert "REQUIRED_NDK" in content
+            assert "REQUIRED_BUILD_TOOLS" in content
+            assert "REQUIRED_CMAKE" in content
+            assert "build-tools;$(REQUIRED_BUILD_TOOLS)" in content
+            assert "cmake;$(REQUIRED_CMAKE)" in content
             assert "analyze:" in content
             assert "test:" in content
             assert "integration:" in content
