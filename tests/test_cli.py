@@ -592,11 +592,18 @@ class TestAppendCommand:
                         result = runner.invoke(
                             cli,
                             ["append", "myapp", "--dir", str(tmp_path)],
-                            input="ios android\ncom.example\napp\nbasic\nnone\nstandard\nnone\nnone\nnone\nskip\n",
+                            input="ios android\ncom.mycompany\napp\nclean\nsqlite\nmocktail\nnone\nnone\nnone\nskip\n",
                         )
                         assert result.exit_code == 0, result.output
+                        mock_setup.run.assert_called_once()
                         config = mock_setup_class.call_args.args[0]
                         assert config.platforms == ["ios", "android"]
+                        assert config.org == "com.mycompany"
+                        assert config.template == "app"
+                        assert config.architecture == "clean"
+                        assert config.database == "sqlite"
+                        assert config.testing == "mocktail"
+                        assert config.flutter_update_mode == "skip"
 
     def test_append_non_flutter_non_interactive_uses_default_platforms(
         self, tmp_path: Path
