@@ -576,7 +576,7 @@ class TestAppendCommand:
     def test_append_non_flutter_interactive_prompts_platforms(
         self, tmp_path: Path
     ) -> None:
-        """In interactive mode, platforms are prompted."""
+        """In interactive mode, platforms and all other settings are prompted."""
         runner = CliRunner()
         with patch("flutter_setup.cli.ConfigManager") as mock_cm:
             mock_cm.return_value.load_config.return_value = self._base_config()
@@ -585,12 +585,16 @@ class TestAppendCommand:
                     with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
                         mock_setup = Mock()
                         mock_setup_class.return_value = mock_setup
+                        # Provide input for: platforms, org, template, architecture,
+                        # database, testing, auth_provider, cloud_database,
+                        # notifications_provider, flutter_update
+                        # (channel comes from _base_config so it is not prompted)
                         result = runner.invoke(
                             cli,
                             ["append", "myapp", "--dir", str(tmp_path)],
-                            input="ios android\n",
+                            input="ios android\ncom.example\napp\nbasic\nnone\nstandard\nnone\nnone\nnone\nskip\n",
                         )
-                        assert result.exit_code == 0
+                        assert result.exit_code == 0, result.output
                         config = mock_setup_class.call_args.args[0]
                         assert config.platforms == ["ios", "android"]
 

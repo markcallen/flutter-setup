@@ -45,6 +45,49 @@ def _is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def _get_merged_or_prompt(
+    ctx: click.Context,
+    param_name: str,
+    cli_value: Any,
+    config_dict: Dict[str, Any],
+    prompt_text: str,
+    choices: list[str] | None = None,
+    config_key: str | None = None,
+) -> Any:
+    """Use CLI value if explicit, config file value if present and valid, else prompt."""
+    key = config_key or param_name
+    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+        return cli_value
+    if key in config_dict:
+        value = config_dict[key]
+        normalized = value.lower() if isinstance(value, str) else value
+        if choices is None or normalized in choices:
+            return normalized if isinstance(value, str) else value
+    if not _is_interactive():
+        return cli_value
+    if choices:
+        return click.prompt(
+            prompt_text,
+            default=cli_value,
+            type=click.Choice(choices, case_sensitive=False),
+        )
+    return click.prompt(prompt_text, default=cli_value)
+
+
+def _get_merged(
+    ctx: click.Context,
+    param_name: str,
+    cli_value: Any,
+    config_dict: Dict[str, Any],
+    config_key: str | None = None,
+) -> Any:
+    """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
+    key = config_key or param_name
+    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+        return cli_value
+    return config_dict.get(key, cli_value)
+
+
 def print_banner() -> None:
     """Print the application banner."""
     banner = """
@@ -431,30 +474,15 @@ def create_command(
             choices: list[str] | None = None,
             config_key: str | None = None,
         ) -> Any:
-            """Use CLI value if explicit, config file value if present and valid, else prompt."""
-            key = config_key or param_name
-            if (
-                ctx.get_parameter_source(param_name)
-                == click.core.ParameterSource.COMMANDLINE
-            ):
-                return cli_value
-            if key in config_dict:
-                value = config_dict[key]
-                # Normalize string values to lowercase for case-insensitive matching
-                normalized = value.lower() if isinstance(value, str) else value
-                if choices is None or normalized in choices:
-                    return normalized if isinstance(value, str) else value
-                # Config value is invalid — fall through to prompt
-            if not _is_interactive():
-                # Non-interactive environment: use CLI default silently
-                return cli_value
-            if choices:
-                return click.prompt(
-                    prompt_text,
-                    default=cli_value,
-                    type=click.Choice(choices, case_sensitive=False),
-                )
-            return click.prompt(prompt_text, default=cli_value)
+            return _get_merged_or_prompt(
+                ctx,
+                param_name,
+                cli_value,
+                config_dict,
+                prompt_text,
+                choices,
+                config_key,
+            )
 
         def get_merged(
             param_name: str,
@@ -462,14 +490,7 @@ def create_command(
             config_dict: Dict[str, Any],
             config_key: str | None = None,
         ) -> Any:
-            """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
-            key = config_key or param_name
-            if (
-                ctx.get_parameter_source(param_name)
-                == click.core.ParameterSource.COMMANDLINE
-            ):
-                return cli_value
-            return config_dict.get(key, cli_value)
+            return _get_merged(ctx, param_name, cli_value, config_dict, config_key)
 
         # Prompt for required arguments if not provided on the command line
         if project_name is None:
@@ -775,7 +796,9 @@ def create_command(
     is_flag=True,
     help="Enable verbose output",
 )
+@click.pass_context
 def append_command(
+    ctx: click.Context,
     project_name: str | None,
     target_dir: str,
     force: bool,
@@ -889,25 +912,163 @@ def append_command(
                         f"Valid options: {', '.join(sorted(VALID_PLATFORMS))}"
                     )
 
+            merged_org = _get_merged_or_prompt(
+                ctx, "org", org, file_project, "Organization ID (e.g., com.mycompany)"
+            )
+            merged_channel = cast(
+                FlutterChannel,
+                _get_merged_or_prompt(
+                    ctx,
+                    "channel",
+                    channel,
+                    file_flutter,
+                    "Flutter channel",
+                    choices=["stable", "beta"],
+                ),
+            )
+            merged_template = cast(
+                TemplateType,
+                _get_merged_or_prompt(
+                    ctx,
+                    "template",
+                    template,
+                    file_project,
+                    "Project template",
+                    choices=["app", "plugin"],
+                ),
+            )
+            merged_architecture = cast(
+                Architecture,
+                _get_merged_or_prompt(
+                    ctx,
+                    "architecture",
+                    architecture,
+                    file_project,
+                    "Architecture",
+                    choices=["basic", "clean"],
+                ),
+            )
+            merged_database = cast(
+                Database,
+                _get_merged_or_prompt(
+                    ctx,
+                    "database",
+                    database,
+                    file_project,
+                    "Local database",
+                    choices=["none", "sqlite"],
+                ),
+            )
+            merged_testing = cast(
+                Testing,
+                _get_merged_or_prompt(
+                    ctx,
+                    "testing",
+                    testing,
+                    file_project,
+                    "Testing framework",
+                    choices=["standard", "mocktail"],
+                ),
+            )
+            merged_auth_provider = cast(
+                AuthProvider,
+                _get_merged_or_prompt(
+                    ctx,
+                    "auth_provider",
+                    auth_provider,
+                    file_project,
+                    "Auth provider",
+                    choices=["none", "firebase"],
+                ),
+            )
+            merged_cloud_database = cast(
+                CloudDatabase,
+                _get_merged_or_prompt(
+                    ctx,
+                    "cloud_database",
+                    cloud_database,
+                    file_project,
+                    "Cloud database",
+                    choices=["none", "firestore"],
+                ),
+            )
+            merged_notifications_provider = cast(
+                NotificationsProvider,
+                _get_merged_or_prompt(
+                    ctx,
+                    "notifications_provider",
+                    notifications_provider,
+                    file_project,
+                    "Notifications provider",
+                    choices=["none", "firebase"],
+                ),
+            )
+            if merged_template == "plugin":
+                merged_ios_language = cast(
+                    IosLanguage,
+                    _get_merged_or_prompt(
+                        ctx,
+                        "ios_language",
+                        ios_language,
+                        file_project,
+                        "iOS language",
+                        choices=["swift", "objc"],
+                    ),
+                )
+                merged_android_language = cast(
+                    AndroidLanguage,
+                    _get_merged_or_prompt(
+                        ctx,
+                        "android_language",
+                        android_language,
+                        file_project,
+                        "Android language",
+                        choices=["kotlin", "java"],
+                    ),
+                )
+            else:
+                merged_ios_language = cast(
+                    IosLanguage,
+                    _get_merged(ctx, "ios_language", ios_language, file_project),
+                )
+                merged_android_language = cast(
+                    AndroidLanguage,
+                    _get_merged(
+                        ctx, "android_language", android_language, file_project
+                    ),
+                )
+            merged_flutter_update = cast(
+                UpdateMode,
+                _get_merged_or_prompt(
+                    ctx,
+                    "flutter_update",
+                    flutter_update,
+                    file_flutter,
+                    "Flutter update mode",
+                    choices=["reset", "reclone", "skip"],
+                    config_key="update_mode",
+                ),
+            )
+
             config = Config(
                 project_name=project_name,
                 platforms=platforms_list,
-                org=org,
-                channel=channel,
+                org=merged_org,
+                channel=merged_channel,
                 output_dir=target_path,
-                template=template,
-                ios_language=ios_language,
-                android_language=android_language,
-                flutter_update_mode=flutter_update,
+                template=merged_template,
+                ios_language=merged_ios_language,
+                android_language=merged_android_language,
+                flutter_update_mode=merged_flutter_update,
                 dry_run=dry_run,
                 verbose=verbose,
                 flutter_location=flutter_location,
-                architecture=architecture,
-                database=database,
-                testing=testing,
-                auth_provider=auth_provider,
-                cloud_database=cloud_database,
-                notifications_provider=notifications_provider,
+                architecture=merged_architecture,
+                database=merged_database,
+                testing=merged_testing,
+                auth_provider=merged_auth_provider,
+                cloud_database=merged_cloud_database,
+                notifications_provider=merged_notifications_provider,
                 flutter_version=flutter_version,
             )
 
