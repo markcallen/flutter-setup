@@ -905,6 +905,10 @@ class FirebaseNotificationsService {
             # flutter pub add failed silently in restricted environments
             if self.config.database == "sqlite":
                 self._add_drift_dev_to_pubspec()
+                # drift_dev >=2.31 requires analyzer >=8.1; flutter_riverpod >=3
+                # pins analyzer <8.0 on Dart 3.8. Both resolve on Dart >=3.9.
+                if self.config.architecture == "clean":
+                    self._ensure_dart_sdk_39_for_drift_riverpod()
 
             console.print("  ✅ Dependencies added")
 
@@ -1081,6 +1085,37 @@ class FirebaseNotificationsService {
                     yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
         except Exception as e:
             console.print(f"  ⚠️  Failed to add drift_dev to pubspec.yaml: {e}")
+
+    def _ensure_dart_sdk_39_for_drift_riverpod(self) -> None:
+        """Bump the Dart SDK constraint to ^3.9.0 when clean+sqlite are both selected.
+
+        drift_dev >=2.31 requires analyzer >=8.1; flutter_riverpod >=3 pulls
+        analyzer <8.0 on Dart 3.8, making pub get fail. Both packages align on
+        analyzer ^9.0.0 starting with Dart 3.9 (released August 2025).
+        """
+        import re
+
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            env = pubspec.setdefault("environment", {})
+            sdk_constraint = str(env.get("sdk", ""))
+            match = re.search(r"(\d+)\.(\d+)", sdk_constraint)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                if (major, minor) < (3, 9):
+                    env["sdk"] = "^3.9.0"
+                    with open(pubspec_path, "w") as f:
+                        yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+                    console.print(
+                        "  ✅ Bumped Dart SDK to ^3.9.0 "
+                        "(drift_dev + flutter_riverpod require Dart >=3.9)"
+                    )
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to update Dart SDK constraint: {e}")
 
     def _create_environment_support(self) -> None:
         """Create environment variable support."""

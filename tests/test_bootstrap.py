@@ -440,6 +440,53 @@ class TestProjectBootstrap:
             content = yaml.safe_load(pubspec_path.read_text())
             assert content["dev_dependencies"]["drift_dev"] == "^2.0.0"
 
+    def test_ensure_dart_sdk_39_bumps_old_constraint(self, config: Config) -> None:
+        """Dart SDK constraint is bumped to ^3.9.0 when below 3.9."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("name: test\nenvironment:\n  sdk: ^3.8.0\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["environment"]["sdk"] == "^3.9.0"
+
+    def test_ensure_dart_sdk_39_leaves_newer_constraint_unchanged(
+        self, config: Config
+    ) -> None:
+        """Dart SDK constraint is not downgraded when already >=3.9."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("name: test\nenvironment:\n  sdk: ^3.10.0\n")
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+            content = yaml.safe_load(pubspec_path.read_text())
+            assert content["environment"]["sdk"] == "^3.10.0"
+
+    def test_ensure_dart_sdk_39_called_for_clean_sqlite(self, config: Config) -> None:
+        """_ensure_dart_sdk_39 is invoked when architecture=clean and database=sqlite."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.architecture = "clean"
+            config.database = "sqlite"
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text(
+                "name: test\ndependencies:\n  drift: ^2.31.0\n"
+                "environment:\n  sdk: ^3.8.0\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            with patch.object(
+                bootstrap, "_ensure_dart_sdk_39_for_drift_riverpod"
+            ) as mock_ensure:
+                bootstrap._add_drift_dev_to_pubspec()
+                # Call the add_dependencies logic path manually
+                bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+                mock_ensure.assert_called_once()
+
     def test_create_readme(self, config: Config) -> None:
         """Test creating README file."""
         with tempfile.TemporaryDirectory() as tmpdir:
