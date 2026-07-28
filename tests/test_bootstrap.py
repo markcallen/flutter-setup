@@ -487,6 +487,27 @@ class TestProjectBootstrap:
                 bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
                 mock_ensure.assert_called_once()
 
+    def test_ensure_dart_sdk_39_no_pubspec(self, config: Config) -> None:
+        """_ensure_dart_sdk_39 returns early when pubspec.yaml is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            # Must not raise even though pubspec.yaml does not exist
+            bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+
+    def test_ensure_dart_sdk_39_handles_yaml_error(self, config: Config) -> None:
+        """_ensure_dart_sdk_39 prints a warning and does not raise on YAML errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            pubspec_path = config.project_path / "pubspec.yaml"
+            pubspec_path.write_text("name: test\nenvironment:\n  sdk: ^3.8.0\n")
+            bootstrap = ProjectBootstrap(config)
+            with patch("builtins.open", side_effect=OSError("disk full")):
+                # Must not raise — exception is caught and warned
+                bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+
     def test_create_readme(self, config: Config) -> None:
         """Test creating README file."""
         with tempfile.TemporaryDirectory() as tmpdir:
