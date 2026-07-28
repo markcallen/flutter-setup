@@ -467,7 +467,7 @@ class TestProjectBootstrap:
             assert content["environment"]["sdk"] == "^3.10.0"
 
     def test_ensure_dart_sdk_39_called_for_clean_sqlite(self, config: Config) -> None:
-        """_ensure_dart_sdk_39 is invoked when architecture=clean and database=sqlite."""
+        """_add_dependencies invokes _ensure_dart_sdk_39 for clean+sqlite projects."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.architecture = "clean"
@@ -479,12 +479,14 @@ class TestProjectBootstrap:
                 "environment:\n  sdk: ^3.8.0\n"
             )
             bootstrap = ProjectBootstrap(config)
-            with patch.object(
-                bootstrap, "_ensure_dart_sdk_39_for_drift_riverpod"
-            ) as mock_ensure:
-                bootstrap._add_drift_dev_to_pubspec()
-                # Call the add_dependencies logic path manually
-                bootstrap._ensure_dart_sdk_39_for_drift_riverpod()
+            with (
+                patch("subprocess.run"),
+                patch.object(bootstrap, "_add_integration_test_sdk_dependency"),
+                patch.object(
+                    bootstrap, "_ensure_dart_sdk_39_for_drift_riverpod"
+                ) as mock_ensure,
+            ):
+                bootstrap._add_dependencies()
                 mock_ensure.assert_called_once()
 
     def test_ensure_dart_sdk_39_no_pubspec(self, config: Config) -> None:
