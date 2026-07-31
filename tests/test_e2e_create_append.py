@@ -56,7 +56,16 @@ class TestCreateThenAppend:
                 mock_cls.return_value = MagicMock()
                 result = runner.invoke(
                     cli,
-                    ["create", "MyApp", "ios", "android", "--dir", str(tmp_path)],
+                    [
+                        "create",
+                        "MyApp",
+                        "--platforms",
+                        "ios",
+                        "--platforms",
+                        "android",
+                        "--dir",
+                        str(tmp_path),
+                    ],
                 )
         assert result.exit_code == 0
         mock_cls.return_value.run.assert_called_once()
@@ -90,7 +99,16 @@ class TestCreateThenAppend:
                 mock_setup.return_value = MagicMock()
                 result = runner.invoke(
                     cli,
-                    ["create", "MyApp", "ios", "android", "--dir", str(tmp_path)],
+                    [
+                        "create",
+                        "MyApp",
+                        "--platforms",
+                        "ios",
+                        "--platforms",
+                        "android",
+                        "--dir",
+                        str(tmp_path),
+                    ],
                 )
         assert result.exit_code == 0
 
@@ -125,7 +143,7 @@ class TestCreateSafeguards:
 
         with _patch_config(tmp_path):
             result = runner.invoke(
-                cli, ["create", "MyApp", "ios", "--dir", str(tmp_path)]
+                cli, ["create", "MyApp", "--platforms", "ios", "--dir", str(tmp_path)]
             )
 
         assert result.exit_code != 0
@@ -139,7 +157,8 @@ class TestCreateSafeguards:
 
         with _patch_config(tmp_path):
             result = runner.invoke(
-                cli, ["create", "CoolProject", "ios", "--dir", str(tmp_path)]
+                cli,
+                ["create", "CoolProject", "--platforms", "ios", "--dir", str(tmp_path)],
             )
 
         assert "CoolProject" in result.output
@@ -156,7 +175,7 @@ class TestCreateSafeguards:
                 mock_cls.return_value = MagicMock()
                 result = runner.invoke(
                     cli,
-                    ["create", "MyApp", "ios", "--dir", str(tmp_path)],
+                    ["create", "MyApp", "--platforms", "ios", "--dir", str(tmp_path)],
                 )
 
         assert result.exit_code == 0
@@ -180,7 +199,15 @@ class TestCreateSafeguards:
                 mock_cls.return_value = MagicMock()
                 result = runner.invoke(
                     cli,
-                    ["create", "MyApp", "ios", "--dir", str(tmp_path), "--dry-run"],
+                    [
+                        "create",
+                        "MyApp",
+                        "--platforms",
+                        "ios",
+                        "--dir",
+                        str(tmp_path),
+                        "--dry-run",
+                    ],
                 )
         assert result.exit_code == 0
         mock_cls.return_value.run.assert_not_called()

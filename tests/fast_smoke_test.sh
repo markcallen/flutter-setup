@@ -9,12 +9,14 @@ sudo chown developer:developer .
 rm -rf flutter_setup.egg-info
 sudo uv pip install -e . --system --break-system-packages
 
-# Run init non-interactively: location, channel, org, architecture, local DB,
-# testing starter, auth, cloud database, notifications.
-printf "\n\ncom.smoke\nbasic\nnone\nstandard\nnone\nnone\nnone\n" | flutter-setup init
+# Run init non-interactively via flags
+flutter-setup init \
+  --flutter-location "$HOME/development/flutter" \
+  --channel stable \
+  --org com.smoke
 
 # Create project with --flutter-update skip to use the pre-installed SDK
-flutter-setup create smoke_app linux --flutter-update skip --verbose
+flutter-setup create smoke_app --platforms linux --flutter-update skip --verbose
 
 # Verify Project creation
 echo "📂 Verifying Project: smoke_app"

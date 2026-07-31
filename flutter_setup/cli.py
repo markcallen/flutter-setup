@@ -113,8 +113,29 @@ def cli(ctx: click.Context) -> None:
     is_flag=True,
     help="Overwrite existing config file if it exists",
 )
-def init_config(force: bool) -> None:
-    """Initialize the configuration file interactively."""
+@click.option(
+    "--flutter-location",
+    default=None,
+    help="Flutter SDK location (skips prompt)",
+)
+@click.option(
+    "--channel",
+    type=click.Choice(["stable", "beta"], case_sensitive=False),
+    default=None,
+    help="Flutter channel (skips prompt)",
+)
+@click.option(
+    "--org",
+    default=None,
+    help="Organization identifier, e.g. com.example (skips prompt)",
+)
+def init_config(
+    force: bool,
+    flutter_location: str | None,
+    channel: str | None,
+    org: str | None,
+) -> None:
+    """Initialize the configuration file interactively or via flags."""
     config_manager = ConfigManager()
     config_manager.ensure_config_dir()
 
@@ -138,67 +159,72 @@ def init_config(force: bool) -> None:
 
     # 1. Flutter Location
     console.print("[bold]1. Flutter SDK Location[/bold]")
-    if existing_config:
-        current_location = existing_config.get("flutter", {}).get("location", "")
-        console.print(f"[dim]Current: {current_location}[/dim]")
+    if flutter_location is not None:
+        resolved_location = Path(flutter_location).expanduser().resolve()
     else:
-        # Try to detect Flutter location
-        detected = config_manager.detect_flutter_location()
-        if detected:
-            console.print(f"[green]✓ Detected Flutter at: {detected}[/green]")
-            current_location = str(detected)
+        if existing_config:
+            current_location = existing_config.get("flutter", {}).get("location", "")
+            console.print(f"[dim]Current: {current_location}[/dim]")
         else:
-            default_location = str(Path.home() / "development" / "flutter")
-            console.print(f"[dim]Default: {default_location}[/dim]")
-            current_location = default_location
+            detected = config_manager.detect_flutter_location()
+            if detected:
+                console.print(f"[green]✓ Detected Flutter at: {detected}[/green]")
+                current_location = str(detected)
+            else:
+                default_location = str(Path.home() / "development" / "flutter")
+                console.print(f"[dim]Default: {default_location}[/dim]")
+                current_location = default_location
 
-    flutter_location_input = click.prompt(
-        "Flutter location",
-        default=current_location,
-        type=str,
-    )
-    flutter_location = Path(flutter_location_input).expanduser().resolve()
+        flutter_location_input = click.prompt(
+            "Flutter location",
+            default=current_location,
+            type=str,
+        )
+        resolved_location = Path(flutter_location_input).expanduser().resolve()
 
-    # Validate Flutter location
-    if not flutter_location.exists():
+    if not resolved_location.exists():
         console.print(
             "[yellow]⚠️  Warning: Path does not exist. It will be created when Flutter is installed.[/yellow]"
         )
 
     # 2. Flutter Channel
     console.print("\n[bold]2. Flutter Channel[/bold]")
-    if existing_config:
-        current_channel = existing_config.get("flutter", {}).get("channel", "stable")
-        console.print(f"[dim]Current: {current_channel}[/dim]")
-    else:
-        current_channel = "stable"
+    if channel is None:
+        if existing_config:
+            current_channel = existing_config.get("flutter", {}).get(
+                "channel", "stable"
+            )
+            console.print(f"[dim]Current: {current_channel}[/dim]")
+        else:
+            current_channel = "stable"
 
-    channel = click.prompt(
-        "Flutter channel",
-        default=current_channel,
-        type=click.Choice(["stable", "beta"], case_sensitive=False),
-    )
+        channel = click.prompt(
+            "Flutter channel",
+            default=current_channel,
+            type=click.Choice(["stable", "beta"], case_sensitive=False),
+        )
 
     # 3. Organization ID
     console.print("\n[bold]3. Organization ID[/bold]")
-    if existing_config:
-        current_org = existing_config.get("project", {}).get("org", "com.example")
-        console.print(f"[dim]Current: {current_org}[/dim]")
-    else:
-        current_org = "com.example"
+    if org is None:
+        if existing_config:
+            current_org = existing_config.get("project", {}).get("org", "com.example")
+            console.print(f"[dim]Current: {current_org}[/dim]")
+        else:
+            current_org = "com.example"
 
-    org = click.prompt(
-        "Organization ID (e.g., com.example, com.mycompany)",
-        default=current_org,
-        type=str,
-    )
+        org = click.prompt(
+            "Organization ID (e.g., com.example, com.mycompany)",
+            default=current_org,
+            type=str,
+        )
 
     # Build the config, preserving any existing project settings not covered by init prompts
     existing_project = existing_config.get("project", {}) if existing_config else {}
     config = {
         "flutter": {
-            "location": str(flutter_location),
-            "channel": channel.lower(),
+            "location": str(resolved_location),
+            "channel": (channel or "stable").lower(),
             "update_mode": (
                 existing_config.get("flutter", {}).get("update_mode", "skip")
                 if existing_config
@@ -331,7 +357,12 @@ def check_command(verbose: bool) -> None:
 
 @cli.command("create")
 @click.argument("project_name", required=False, default=None)
-@click.argument("platforms", nargs=-1)
+@click.option(
+    "--platforms",
+    multiple=True,
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
+    help="Target platforms (repeat for multiple: --platforms ios --platforms android)",
+)
 @click.option(
     "--org",
     default="com.example",
@@ -698,6 +729,13 @@ def create_command(
 @cli.command("append")
 @click.argument("project_name", required=False, default=None)
 @click.option(
+    "--platforms",
+    multiple=True,
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
+    help="Platforms for a new project (only used when target is not a Flutter project; "
+    "repeat for multiple: --platforms ios --platforms android)",
+)
+@click.option(
     "--dir",
     "target_dir",
     default=".",
@@ -800,6 +838,7 @@ def create_command(
 def append_command(
     ctx: click.Context,
     project_name: str | None,
+    platforms: tuple[str, ...],
     target_dir: str,
     force: bool,
     org: str,
@@ -852,13 +891,15 @@ def append_command(
         is_flutter = detect_flutter_project(target_path)
 
         if is_flutter:
-            platforms = detect_platforms(target_path)
+            detected_platforms = detect_platforms(target_path)
             console.print(f"[dim]Detected Flutter project: {target_path.name}[/dim]")
-            console.print(f"[dim]Detected platforms: {', '.join(platforms)}[/dim]")
+            console.print(
+                f"[dim]Detected platforms: {', '.join(detected_platforms)}[/dim]"
+            )
 
             config = Config(
                 project_name=target_path.name,
-                platforms=platforms,
+                platforms=detected_platforms,
                 org=org,
                 channel=channel,
                 output_dir=target_path.parent,
@@ -894,7 +935,9 @@ def append_command(
                 )
 
             platforms_list: list[str]
-            if not _is_interactive():
+            if platforms:
+                platforms_list = list(platforms)
+            elif not _is_interactive():
                 platforms_list = ["ios", "android", "web"]
             else:
                 console.print(

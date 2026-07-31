@@ -6,12 +6,14 @@ echo "🚀 Starting Flutter Setup Smoke Test (Full E2E)"
 # Install the package
 sudo uv pip install -e . --system --break-system-packages
 
-# Run init non-interactively: location, channel, org, architecture, local DB,
-# testing starter, auth, cloud database, notifications.
-printf "\n\ncom.smoke\nbasic\nnone\nstandard\nnone\nnone\nnone\n" | flutter-setup init
+# Run init non-interactively via flags
+flutter-setup init \
+  --flutter-location "$HOME/development/flutter" \
+  --channel stable \
+  --org com.smoke
 
 # Create project — installs prerequisites (using sudo) and Flutter SDK
-flutter-setup create smoke_app linux --verbose
+flutter-setup create smoke_app --platforms linux --verbose
 
 # Verify Flutter installation
 FLUTTER_PATH="$HOME/development/flutter/bin"
