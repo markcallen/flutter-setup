@@ -120,7 +120,7 @@ def cli(ctx: click.Context) -> None:
 )
 @click.option(
     "--channel",
-    type=click.Choice(["stable", "beta"]),
+    type=click.Choice(["stable", "beta"], case_sensitive=False),
     default=None,
     help="Flutter channel (skips prompt)",
 )
@@ -360,7 +360,7 @@ def check_command(verbose: bool) -> None:
 @click.option(
     "--platforms",
     multiple=True,
-    type=click.Choice(sorted(VALID_PLATFORMS)),
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
     help="Target platforms (repeat for multiple: --platforms ios --platforms android)",
 )
 @click.option(
@@ -731,7 +731,7 @@ def create_command(
 @click.option(
     "--platforms",
     multiple=True,
-    type=click.Choice(sorted(VALID_PLATFORMS)),
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
     help="Platforms for a new project (only used when target is not a Flutter project; "
     "repeat for multiple: --platforms ios --platforms android)",
 )
