@@ -463,6 +463,7 @@ class TestCicdGenerator:
             generator._generate_lint_workflow(workflows_dir)
             content = (workflows_dir / "lint.yml").read_text()
             assert "permissions:" in content
+            assert "contents: read" in content
             assert "pull-requests: write" in content
 
     def test_format_workflow_has_pr_write_permission(self, config: Config) -> None:
@@ -476,6 +477,7 @@ class TestCicdGenerator:
             generator._generate_format_workflow(workflows_dir)
             content = (workflows_dir / "format.yml").read_text()
             assert "permissions:" in content
+            assert "contents: read" in content
             assert "pull-requests: write" in content
 
     def test_build_artifacts_fail_when_missing(self, config: Config) -> None:

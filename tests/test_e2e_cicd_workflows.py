@@ -66,30 +66,38 @@ def _generate_workflows(config: Config, tmp_path: Path) -> dict[str, dict[str, A
 class TestWorkflowPermissions:
     """Jobs that post PR comments must carry pull-requests: write."""
 
-    def test_lint_job_has_pull_requests_write(self, tmp_path: Path) -> None:
+    def test_lint_job_has_required_permissions(self, tmp_path: Path) -> None:
         workflows = _generate_workflows(_make_config(), tmp_path)
-        lint_job = workflows["lint.yml"]["jobs"]["lint"]
-        assert lint_job.get("permissions", {}).get("pull-requests") == "write", (
-            "lint job must grant pull-requests: write so the 'Comment PR' step "
-            "can post without a 403"
+        perms = workflows["lint.yml"]["jobs"]["lint"].get("permissions", {})
+        assert (
+            perms.get("pull-requests") == "write"
+        ), "lint job must grant pull-requests: write so PR comment step works"
+        assert perms.get("contents") == "read", (
+            "lint job must grant contents: read — setting any job permission "
+            "drops all others to none, which breaks actions/checkout"
         )
 
-    def test_format_job_has_pull_requests_write(self, tmp_path: Path) -> None:
+    def test_format_job_has_required_permissions(self, tmp_path: Path) -> None:
         workflows = _generate_workflows(_make_config(), tmp_path)
-        format_job = workflows["format.yml"]["jobs"]["format"]
-        assert format_job.get("permissions", {}).get("pull-requests") == "write", (
-            "format job must grant pull-requests: write so the 'Comment PR' step "
-            "can post without a 403"
-        )
+        perms = workflows["format.yml"]["jobs"]["format"].get("permissions", {})
+        assert (
+            perms.get("pull-requests") == "write"
+        ), "format job must grant pull-requests: write so PR comment step works"
+        assert (
+            perms.get("contents") == "read"
+        ), "format job must grant contents: read so actions/checkout can clone"
 
     def test_permissions_present_for_sqlite_project(self, tmp_path: Path) -> None:
         workflows = _generate_workflows(_make_config(database="sqlite"), tmp_path)
         for wf_name in ("lint.yml", "format.yml"):
             job_key = wf_name.replace(".yml", "")
-            job = workflows[wf_name]["jobs"][job_key]
+            perms = workflows[wf_name]["jobs"][job_key].get("permissions", {})
             assert (
-                job.get("permissions", {}).get("pull-requests") == "write"
+                perms.get("pull-requests") == "write"
             ), f"{wf_name} sqlite project must still have pull-requests: write"
+            assert (
+                perms.get("contents") == "read"
+            ), f"{wf_name} sqlite project must still have contents: read"
 
 
 # ---------------------------------------------------------------------------
