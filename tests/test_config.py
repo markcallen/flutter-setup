@@ -40,6 +40,7 @@ class TestConfig:
         assert config.architecture == "basic"
         assert config.database == "none"
         assert config.testing == "standard"
+        assert config.e2e_testing == "integration_test"
         assert config.auth_provider == "none"
         assert config.cloud_database == "none"
         assert config.notifications_provider == "none"
@@ -299,6 +300,7 @@ class TestConfig:
             architecture="clean",
             database="sqlite",
             testing="mocktail",
+            e2e_testing="patrol",
             auth_provider="firebase",
             cloud_database="firestore",
             notifications_provider="firebase",
@@ -307,6 +309,7 @@ class TestConfig:
         assert config.architecture == "clean"
         assert config.database == "sqlite"
         assert config.testing == "mocktail"
+        assert config.e2e_testing == "patrol"
         assert config.auth_provider == "firebase"
         assert config.cloud_database == "firestore"
         assert config.notifications_provider == "firebase"
@@ -335,6 +338,7 @@ class TestConfig:
         [
             ("database", "postgres", "Invalid database"),
             ("testing", "pytest", "Invalid testing framework"),
+            ("e2e_testing", "espresso", "Invalid end-to-end testing framework"),
             ("auth_provider", "custom", "Invalid auth provider"),
             ("cloud_database", "supabase", "Invalid cloud database"),
             (

@@ -14,6 +14,7 @@ Platform = Literal["ios", "android", "macos", "linux", "windows", "web"]
 Architecture = Literal["basic", "clean"]
 Database = Literal["none", "sqlite"]
 Testing = Literal["standard", "mocktail"]
+E2ETesting = Literal["integration_test", "patrol"]
 AuthProvider = Literal["none", "firebase"]
 CloudDatabase = Literal["none", "firestore"]
 NotificationsProvider = Literal["none", "firebase"]
@@ -38,6 +39,7 @@ class Config:
     architecture: Architecture = "basic"
     database: Database = "none"
     testing: Testing = "standard"
+    e2e_testing: E2ETesting = "integration_test"
     auth_provider: AuthProvider = "none"
     cloud_database: CloudDatabase = "none"
     notifications_provider: NotificationsProvider = "none"
@@ -79,6 +81,11 @@ class Config:
 
         if self.testing not in ["standard", "mocktail"]:
             raise ValueError(f"Invalid testing framework: {self.testing}")
+
+        if self.e2e_testing not in ["integration_test", "patrol"]:
+            raise ValueError(
+                f"Invalid end-to-end testing framework: {self.e2e_testing}"
+            )
 
         if self.auth_provider not in ["none", "firebase"]:
             raise ValueError(f"Invalid auth provider: {self.auth_provider}")

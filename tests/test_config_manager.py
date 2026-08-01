@@ -52,6 +52,7 @@ class TestConfigManager:
         assert "project" in config
         assert config["flutter"]["channel"] == "stable"
         assert config["project"]["org"] == "com.example"
+        assert config["project"]["e2e_testing"] == "integration_test"
 
     def test_create_default_config(self) -> None:
         """Test creating default config file."""

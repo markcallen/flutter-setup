@@ -160,7 +160,8 @@ class TestCLI:
                 mock_setup = Mock()
                 mock_setup_class.return_value = mock_setup
                 # Prompts in order: project name, platforms, template, architecture,
-                # database, testing, auth_provider, cloud_database, notifications_provider.
+                # database, testing, e2e_testing, auth_provider, cloud_database,
+                # notifications_provider.
                 # ios/android language are NOT prompted because template="app".
                 user_input = (
                     "\n".join(
@@ -171,6 +172,7 @@ class TestCLI:
                             "clean",
                             "sqlite",
                             "mocktail",
+                            "patrol",
                             "none",
                             "none",
                             "none",
@@ -189,6 +191,7 @@ class TestCLI:
                 assert config.architecture == "clean"
                 assert config.database == "sqlite"
                 assert config.testing == "mocktail"
+                assert config.e2e_testing == "patrol"
 
     def test_create_command_plugin_template_prompts_languages(self) -> None:
         """ios/android language prompts appear only for plugin template."""
@@ -215,6 +218,7 @@ class TestCLI:
                             "basic",  # architecture
                             "none",  # database
                             "standard",  # testing
+                            "integration_test",  # e2e_testing
                             "none",  # auth_provider
                             "none",  # cloud_database
                             "none",  # notifications_provider
@@ -231,6 +235,7 @@ class TestCLI:
                 assert result.exit_code == 0
                 config = mock_setup_class.call_args.args[0]
                 assert config.template == "plugin"
+                assert config.e2e_testing == "integration_test"
                 assert config.ios_language == "objc"
                 assert config.android_language == "java"
 
@@ -252,6 +257,7 @@ class TestCLI:
                     "architecture": "basic",
                     "database": "none",
                     "testing": "standard",
+                    "e2e_testing": "integration_test",
                     "auth_provider": "none",
                     "cloud_database": "none",
                     "notifications_provider": "none",
@@ -306,6 +312,31 @@ class TestCLI:
                 config = mock_setup_class.call_args.args[0]
                 assert config.flutter_version == "3.24.0"
 
+    def test_create_command_with_patrol_e2e_testing(self) -> None:
+        """--e2e-testing is passed through to Config."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_manager_class:
+            mock_manager = Mock()
+            mock_manager_class.return_value = mock_manager
+            mock_manager.load_config.return_value = {
+                "flutter": {
+                    "location": "/flutter",
+                    "channel": "stable",
+                    "update_mode": "skip",
+                },
+                "project": {"org": "com.example"},
+            }
+            with patch("flutter_setup.cli.FlutterSetup") as mock_setup_class:
+                mock_setup = Mock()
+                mock_setup_class.return_value = mock_setup
+                result = runner.invoke(
+                    cli,
+                    ["create", "TestApp", "ios", "--e2e-testing", "patrol"],
+                )
+                assert result.exit_code == 0
+                config = mock_setup_class.call_args.args[0]
+                assert config.e2e_testing == "patrol"
+
     def test_init_config_preserves_project_settings(self) -> None:
         """Re-running init preserves existing project settings like architecture."""
         runner = CliRunner()
@@ -321,6 +352,7 @@ class TestCLI:
                     "architecture": "clean",
                     "database": "sqlite",
                     "testing": "mocktail",
+                    "e2e_testing": "patrol",
                     "auth_provider": "firebase",
                     "cloud_database": "firestore",
                     "notifications_provider": "firebase",
@@ -339,6 +371,7 @@ class TestCLI:
                 assert saved["project"]["architecture"] == "clean"
                 assert saved["project"]["database"] == "sqlite"
                 assert saved["project"]["testing"] == "mocktail"
+                assert saved["project"]["e2e_testing"] == "patrol"
                 assert saved["project"]["auth_provider"] == "firebase"
                 assert saved["project"]["ios_language"] == "objc"
                 assert saved["project"]["android_language"] == "java"
@@ -544,6 +577,52 @@ class TestAppendCommand:
                         )
                         assert result.exit_code == 0
                         assert mock_bs_class.call_args.kwargs["force"] is True
+
+    def test_append_existing_flutter_project_with_patrol_e2e_testing(
+        self, tmp_path: Path
+    ) -> None:
+        """--e2e-testing is forwarded to append Config."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = self._base_config()
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(
+                            cli,
+                            [
+                                "append",
+                                "--dir",
+                                str(tmp_path),
+                                "--e2e-testing",
+                                "patrol",
+                            ],
+                        )
+                        assert result.exit_code == 0
+                        config = mock_bs_class.call_args.args[0]
+                        assert config.e2e_testing == "patrol"
+
+    def test_append_existing_flutter_project_uses_config_e2e_testing(
+        self, tmp_path: Path
+    ) -> None:
+        """Config file e2e_testing is used when CLI option is omitted."""
+        runner = CliRunner()
+        with patch("flutter_setup.cli.ConfigManager") as mock_cm:
+            mock_cm.return_value.load_config.return_value = {
+                "flutter": {"location": "/flutter", "channel": "stable"},
+                "project": {"e2e_testing": "patrol"},
+            }
+            with patch("flutter_setup.cli.detect_flutter_project", return_value=True):
+                with patch("flutter_setup.cli.detect_platforms", return_value=["ios"]):
+                    with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs_class:
+                        mock_bs = Mock()
+                        mock_bs_class.return_value = mock_bs
+                        result = runner.invoke(cli, ["append", "--dir", str(tmp_path)])
+                        assert result.exit_code == 0
+                        config = mock_bs_class.call_args.args[0]
+                        assert config.e2e_testing == "patrol"
 
     def test_append_non_flutter_with_project_name(self, tmp_path: Path) -> None:
         """Non-Flutter directory with project_name argument runs full FlutterSetup."""

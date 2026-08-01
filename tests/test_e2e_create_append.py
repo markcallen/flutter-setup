@@ -331,6 +331,33 @@ class TestAppendSafeguards:
         config = mock_bs.call_args.args[0]
         assert config.org == "com.customorg"
 
+    def test_append_passes_patrol_e2e_option(self, tmp_path: Path) -> None:
+        """append passes the selected end-to-end framework into bootstrap."""
+        runner = CliRunner()
+        project_dir = tmp_path / "MyApp"
+        project_dir.mkdir()
+        (project_dir / "pubspec.yaml").write_text(
+            "name: my_app\nflutter:\n  uses-material-design: true\n"
+        )
+
+        with _patch_config(tmp_path):
+            with patch("flutter_setup.cli.ProjectBootstrap") as mock_bs:
+                mock_bs.return_value = MagicMock()
+                result = runner.invoke(
+                    cli,
+                    [
+                        "append",
+                        "--dir",
+                        str(project_dir),
+                        "--e2e-testing",
+                        "patrol",
+                    ],
+                )
+
+        assert result.exit_code == 0
+        config = mock_bs.call_args.args[0]
+        assert config.e2e_testing == "patrol"
+
 
 # ---------------------------------------------------------------------------
 # README safeguard (bootstrap level)

@@ -21,6 +21,7 @@ from typing import Any, Iterator
 from unittest.mock import patch
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from flutter_setup.bootstrap import ProjectBootstrap
@@ -116,8 +117,10 @@ class TestPhotoSlideshowAppend:
     at the responsible method.
     """
 
-    def _run(self, project_dir: Path, *, force: bool = False) -> None:
-        bootstrap = ProjectBootstrap(_make_config(project_dir), force=force)
+    def _run(self, project_dir: Path, *, force: bool = False, **overrides: Any) -> None:
+        bootstrap = ProjectBootstrap(
+            _make_config(project_dir, **overrides), force=force
+        )
         with _no_flutter_sdk():
             bootstrap.append_project()
 
@@ -169,6 +172,24 @@ class TestPhotoSlideshowAppend:
         self._run(photo_slideshow)
         readme = (photo_slideshow / "README.md").read_text()
         assert "## flutter-setup" in readme
+
+    def test_append_patrol_e2e_scaffold(self, photo_slideshow: Path) -> None:
+        self._run(photo_slideshow, e2e_testing="patrol")
+
+        patrol_test = photo_slideshow / "patrol_test" / "app_test.dart"
+        assert patrol_test.exists()
+        assert "patrolTest" in patrol_test.read_text()
+
+        pubspec = yaml.safe_load((photo_slideshow / "pubspec.yaml").read_text())
+        assert pubspec["dev_dependencies"]["patrol"] == "any"
+        assert (
+            pubspec["patrol"]["android"]["package_name"]
+            == "com.example.photo_slideshow"
+        )
+
+        makefile = (photo_slideshow / "Makefile").read_text()
+        assert "patrol-test:" in makefile
+        assert "patrol-doctor:" in makefile
 
     # --- existing files that must not be touched ----------------------------
 

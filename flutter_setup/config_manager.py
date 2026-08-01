@@ -51,6 +51,7 @@ class ConfigManager:
                 "architecture": "basic",
                 "database": "none",
                 "testing": "standard",
+                "e2e_testing": "integration_test",
                 "auth_provider": "none",
                 "cloud_database": "none",
                 "notifications_provider": "none",
