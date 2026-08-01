@@ -132,6 +132,8 @@ jobs:
   lint:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,7 +152,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-{self._codegen_step()}
+
       - name: Analyze
         run: flutter analyze
 
@@ -188,6 +190,8 @@ jobs:
   format:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
