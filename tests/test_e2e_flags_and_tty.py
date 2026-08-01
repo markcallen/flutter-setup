@@ -36,6 +36,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
             "architecture": "basic",
             "database": "none",
             "testing": "standard",
+            "e2e_testing": "integration_test",
             "auth_provider": "none",
             "cloud_database": "none",
             "notifications_provider": "none",

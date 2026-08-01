@@ -116,6 +116,7 @@ flutter-setup append MyApp --dir ./projects
 | `--architecture` | Application architecture scaffold (basic/clean) | `basic` | ✅ |
 | `--database` | Local persistence scaffold (none/sqlite) | `none` | ✅ |
 | `--testing` | Testing starter scaffold (standard/mocktail) | `standard` | ✅ |
+| `--e2e-testing` | End-to-end testing framework (integration_test/patrol) | `integration_test` | ✅ |
 | `--auth-provider` | Auth integration scaffold (none/firebase) | `none` | ✅ |
 | `--cloud-database` | Cloud database scaffold (none/firestore) | `none` | ✅ |
 | `--notifications-provider` | Push notifications scaffold (none/firebase) | `none` | ✅ |
@@ -149,6 +150,7 @@ flutter-setup append MyApp --dir ./projects
 - ✅ Optional SQLite/Drift local persistence scaffold
 - ✅ Optional Firebase Auth, Firestore, and Firebase Messaging scaffolds
 - ✅ Optional Mocktail testing starter
+- ✅ Optional Patrol end-to-end testing scaffold
 
 ### 4. Development Environment
 - ✅ VS Code/Cursor configuration
@@ -170,6 +172,7 @@ MyAwesomeApp/
 │   ├── unit/               # Unit tests
 │   └── widget/             # Widget tests
 ├── integration_test/        # Integration tests
+├── patrol_test/             # Patrol tests (when --e2e-testing patrol)
 ├── Makefile                 # Common development commands
 ├── analysis_options.yaml    # Linting and analysis rules
 ├── .env                     # Environment variables
@@ -189,6 +192,10 @@ make run_android      # Android emulator
 # Testing
 make test             # Unit + widget tests
 make integration      # Integration tests
+
+# End-to-end testing
+make patrol-test      # Patrol tests when --e2e-testing patrol
+make patrol-doctor    # Patrol environment diagnostics
 
 # Code quality
 make analyze          # Flutter analyze
@@ -213,6 +220,7 @@ project:
   architecture: basic
   database: none
   testing: standard
+  e2e_testing: integration_test
   auth_provider: none
   cloud_database: none
   notifications_provider: none

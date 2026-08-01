@@ -114,6 +114,9 @@ class ProjectBootstrap:
         # Add dependencies
         self._add_dependencies()
 
+        # Create optional end-to-end test scaffolds
+        self._create_e2e_scaffold()
+
         # Update pubspec description (flutter create leaves a generic placeholder)
         self._update_pubspec_description()
 
@@ -314,6 +317,8 @@ setup-emulator:
                 f"{run_android_emulator_check}\t{flutter_cmd} run -d emulator\n\n"
             )
 
+        e2e_targets = self._build_e2e_makefile_targets(version_dep, codegen_dep)
+
         return f"""{version_header}{android_sdk_header}{web_target}{ios_target}{android_target}analyze:{version_dep}{codegen_dep}
 \t{flutter_cmd} analyze
 
@@ -323,12 +328,25 @@ test:{version_dep}{codegen_dep}
 integration:{version_dep}{codegen_dep}
 \t{flutter_cmd} test integration_test
 
+{e2e_targets}
 upgrade:{version_dep}
 \t{flutter_cmd} pub upgrade
 
 upgrade-check:{version_dep}
 \t{flutter_cmd} pub get
 {generate_target}{android_sdk_target}{version_target}"""
+
+    def _build_e2e_makefile_targets(self, version_dep: str, codegen_dep: str) -> str:
+        """Return optional Makefile targets for selected end-to-end tooling."""
+        if self.config.e2e_testing != "patrol":
+            return ""
+
+        return f"""patrol-test:{version_dep}{codegen_dep}
+\tpatrol test -t patrol_test/app_test.dart
+
+patrol-doctor:
+\tpatrol doctor
+"""
 
     def _create_makefile(self) -> None:
         """Create Makefile with common commands."""
@@ -415,6 +433,7 @@ upgrade-check:{version_dep}
         console.print("  🔧 Appending flutter-setup tooling...")
         self._append_vscode_config()
         self._append_makefile()
+        self._create_e2e_scaffold()
         self._create_cicd()
         self._append_readme()
         console.print("  ✅ Tooling appended")
@@ -552,6 +571,62 @@ void main() {{
             self.config.project_path / "integration_test" / "app_test.dart", "w"
         ) as f:
             f.write(integration_test)
+
+    def _create_e2e_scaffold(self) -> None:
+        """Create optional end-to-end test scaffolds."""
+        if self.config.e2e_testing == "patrol":
+            self._create_patrol_scaffold()
+
+    def _create_patrol_scaffold(self) -> None:
+        """Create Patrol end-to-end test support."""
+        self._create_patrol_sample_test()
+        self._add_patrol_to_pubspec()
+        self._add_patrol_config_to_pubspec()
+        self._add_patrol_to_gitignore()
+        console.print("  ✅ Patrol end-to-end scaffold created")
+
+    def _create_patrol_sample_test(self) -> None:
+        """Create a sample Patrol test unless one already exists."""
+        patrol_dir = self.config.project_path / "patrol_test"
+        patrol_dir.mkdir(exist_ok=True)
+        test_file = patrol_dir / "app_test.dart"
+        if test_file.exists() and not self.force:
+            return
+
+        app_import = f"package:{self.config.package_name}/main.dart"
+        app_widget = "MyApp"
+        riverpod_import = ""
+        pump_widget = f"const {app_widget}()"
+        if self.config.architecture == "clean":
+            app_import = f"package:{self.config.package_name}/src/app/app.dart"
+            app_widget = "App"
+            riverpod_import = (
+                "import 'package:flutter_riverpod/flutter_riverpod.dart';\n"
+            )
+            pump_widget = f"const ProviderScope(child: {app_widget}())"
+
+        assertion = (
+            "expect(find.text('Home'), findsOneWidget);"
+            if self.config.architecture == "clean"
+            else f"expect(find.byType({app_widget}), findsOneWidget);"
+        )
+
+        test_file.write_text(f"""import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:patrol/patrol.dart';
+{riverpod_import}import '{app_import}';
+
+void main() {{
+  setUpAll(() async {{
+    await dotenv.load(fileName: '.env', isOptional: true);
+  }});
+
+  patrolTest('home page renders', ($) async {{
+    await $.pumpWidgetAndSettle({pump_widget});
+    {assertion}
+  }});
+}}
+""")
 
     def _create_analysis_options(self) -> None:
         """Create analysis options file."""
@@ -970,6 +1045,9 @@ class FirebaseNotificationsService {
         if self.config.testing == "mocktail":
             dependencies.append("mocktail")
 
+        if self.config.e2e_testing == "patrol":
+            dependencies.append("patrol")
+
         return dependencies
 
     _GENERIC_PUBSPEC_DESCRIPTION = "A new Flutter project."
@@ -1055,6 +1133,59 @@ class FirebaseNotificationsService {
 
         except Exception as e:
             console.print(f"  ⚠️  Failed to add integration_test SDK dependency: {e}")
+
+    def _add_patrol_to_pubspec(self) -> None:
+        """Ensure Patrol is present in pubspec.yaml dev_dependencies."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            console.print("  ⚠️  pubspec.yaml not found, skipping Patrol dependency")
+            return
+
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            dev_deps = pubspec.setdefault("dev_dependencies", {})
+            if "patrol" in dev_deps:
+                return
+            dev_deps["patrol"] = "any"
+            with open(pubspec_path, "w") as f:
+                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add Patrol dependency: {e}")
+
+    def _add_patrol_config_to_pubspec(self) -> None:
+        """Ensure the Patrol pubspec.yaml section exists."""
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            console.print("  ⚠️  pubspec.yaml not found, skipping Patrol config")
+            return
+
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            original = yaml.dump(pubspec, default_flow_style=False, sort_keys=False)
+            patrol_config = pubspec.setdefault("patrol", {})
+            patrol_config.setdefault("app_name", self.config.project_name)
+            # Apple bundle identifiers must not contain underscores.
+            safe_package = self.config.package_name.replace("_", "-")
+            package_id = f"{self.config.org}.{safe_package}"
+            android_id = f"{self.config.org}.{self.config.package_name}"
+            if "android" in self.config.platforms:
+                android = patrol_config.setdefault("android", {})
+                android.setdefault("package_name", android_id)
+            if "ios" in self.config.platforms:
+                ios = patrol_config.setdefault("ios", {})
+                ios.setdefault("bundle_id", package_id)
+            if "macos" in self.config.platforms:
+                macos = patrol_config.setdefault("macos", {})
+                macos.setdefault("bundle_id", package_id)
+            updated = yaml.dump(pubspec, default_flow_style=False, sort_keys=False)
+            if updated == original:
+                return
+            with open(pubspec_path, "w") as f:
+                f.write(updated)
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to add Patrol config: {e}")
 
     def _add_drift_dev_to_pubspec(self) -> None:
         """Write drift_dev directly to pubspec.yaml dev_dependencies for sqlite projects.
@@ -1164,6 +1295,28 @@ API_URL=https://api.example.com
                 f.write(entry)
         else:
             gitignore_path.write_text(f"# Environment variables\n{entry}")
+
+    def _add_patrol_to_gitignore(self) -> None:
+        """Ensure Patrol-generated files and local secrets are gitignored."""
+        gitignore_path = self.config.project_path / ".gitignore"
+        entries = ["**/test_bundle.dart", ".patrol.env"]
+        existing = gitignore_path.read_text() if gitignore_path.exists() else ""
+        existing_lines = {line.strip() for line in existing.splitlines()}
+        missing = [entry for entry in entries if entry not in existing_lines]
+        if not missing:
+            return
+
+        if gitignore_path.exists():
+            with open(gitignore_path, "a") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write("\n# Patrol\n")
+                for entry in missing:
+                    f.write(f"{entry}\n")
+        else:
+            gitignore_path.write_text(
+                "# Patrol\n" + "".join(f"{entry}\n" for entry in missing)
+            )
 
     def _add_env_asset_to_pubspec(self) -> None:
         """Add .env to the flutter assets list in pubspec.yaml."""
@@ -1281,6 +1434,12 @@ make generate
 ```
 """
 
+        e2e_commands = "make integration    # Flutter SDK integration_test/"
+        if self.config.e2e_testing == "patrol":
+            e2e_commands += """
+make patrol-test    # Patrol native end-to-end tests
+make patrol-doctor  # Patrol environment diagnostics"""
+
         return f"""## flutter-setup
 
 ### Quickstart
@@ -1292,7 +1451,11 @@ flutter pub get
 ### Testing
 ```bash
 make test           # unit + widget tests
-make integration    # integration_test/
+```
+
+### End-to-End Testing
+```bash
+{e2e_commands}
 ```
 
 ### Linting
@@ -1310,6 +1473,7 @@ or use `--dart-define-from-file=.env.json` for build-time injection.
 - Architecture: `{self.config.architecture}`
 - Database: `{self.config.database}`
 - Testing: `{self.config.testing}`
+- End-to-end testing: `{self.config.e2e_testing}`
 - Auth provider: `{self.config.auth_provider}`
 - Cloud database: `{self.config.cloud_database}`
 - Notifications: `{self.config.notifications_provider}`

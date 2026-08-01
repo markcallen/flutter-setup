@@ -26,6 +26,7 @@ from .config import (
     Architecture,
     Database,
     Testing,
+    E2ETesting,
     AuthProvider,
     CloudDatabase,
     NotificationsProvider,
@@ -241,6 +242,7 @@ def init_config(
                     "architecture",
                     "database",
                     "testing",
+                    "e2e_testing",
                     "auth_provider",
                     "cloud_database",
                     "notifications_provider",
@@ -405,6 +407,12 @@ def check_command(verbose: bool) -> None:
     help="Testing starter scaffold (default: standard)",
 )
 @click.option(
+    "--e2e-testing",
+    type=click.Choice(["integration_test", "patrol"]),
+    default="integration_test",
+    help="End-to-end testing framework (default: integration_test)",
+)
+@click.option(
     "--auth-provider",
     type=click.Choice(["none", "firebase"]),
     default="none",
@@ -468,6 +476,7 @@ def create_command(
     architecture: Architecture,
     database: Database,
     testing: Testing,
+    e2e_testing: E2ETesting,
     auth_provider: AuthProvider,
     cloud_database: CloudDatabase,
     notifications_provider: NotificationsProvider,
@@ -604,6 +613,16 @@ def create_command(
                 choices=["standard", "mocktail"],
             ),
         )
+        merged_e2e_testing = cast(
+            E2ETesting,
+            get_merged_or_prompt(
+                "e2e_testing",
+                e2e_testing,
+                file_project,
+                "End-to-end testing framework",
+                choices=["integration_test", "patrol"],
+            ),
+        )
         merged_auth_provider = cast(
             AuthProvider,
             get_merged_or_prompt(
@@ -693,6 +712,7 @@ def create_command(
             architecture=merged_architecture,
             database=merged_database,
             testing=merged_testing,
+            e2e_testing=merged_e2e_testing,
             auth_provider=merged_auth_provider,
             cloud_database=merged_cloud_database,
             notifications_provider=merged_notifications_provider,
@@ -783,6 +803,12 @@ def create_command(
     help="Testing starter scaffold (default: standard)",
 )
 @click.option(
+    "--e2e-testing",
+    type=click.Choice(["integration_test", "patrol"]),
+    default="integration_test",
+    help="End-to-end testing framework (default: integration_test)",
+)
+@click.option(
     "--auth-provider",
     type=click.Choice(["none", "firebase"]),
     default="none",
@@ -847,6 +873,7 @@ def append_command(
     architecture: Architecture,
     database: Database,
     testing: Testing,
+    e2e_testing: E2ETesting,
     auth_provider: AuthProvider,
     cloud_database: CloudDatabase,
     notifications_provider: NotificationsProvider,
@@ -886,6 +913,12 @@ def append_command(
             org = file_project["org"]
         if channel == "stable" and file_flutter.get("channel"):
             channel = cast(FlutterChannel, file_flutter["channel"])
+        if ctx.get_parameter_source(
+            "e2e_testing"
+        ) != click.core.ParameterSource.COMMANDLINE and file_project.get("e2e_testing"):
+            raw = str(file_project["e2e_testing"]).lower()
+            if raw in ("integration_test", "patrol"):
+                e2e_testing = cast(E2ETesting, raw)
 
         target_path = Path(target_dir).resolve()
         is_flutter = detect_flutter_project(target_path)
@@ -913,6 +946,7 @@ def append_command(
                 architecture=architecture,
                 database=database,
                 testing=testing,
+                e2e_testing=e2e_testing,
                 auth_provider=auth_provider,
                 cloud_database=cloud_database,
                 notifications_provider=notifications_provider,
@@ -1013,6 +1047,17 @@ def append_command(
                     choices=["standard", "mocktail"],
                 ),
             )
+            merged_e2e_testing = cast(
+                E2ETesting,
+                _get_merged_or_prompt(
+                    ctx,
+                    "e2e_testing",
+                    e2e_testing,
+                    file_project,
+                    "End-to-end testing framework",
+                    choices=["integration_test", "patrol"],
+                ),
+            )
             merged_auth_provider = cast(
                 AuthProvider,
                 _get_merged_or_prompt(
@@ -1109,6 +1154,7 @@ def append_command(
                 architecture=merged_architecture,
                 database=merged_database,
                 testing=merged_testing,
+                e2e_testing=merged_e2e_testing,
                 auth_provider=merged_auth_provider,
                 cloud_database=merged_cloud_database,
                 notifications_provider=merged_notifications_provider,

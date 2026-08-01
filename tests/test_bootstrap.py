@@ -109,6 +109,36 @@ class TestProjectBootstrap:
             assert "generate:" in content
             assert "build_runner" in content
 
+    def test_create_makefile_includes_patrol_targets_when_selected(
+        self, config: Config
+    ) -> None:
+        """Test that Patrol Makefile targets are created when selected."""
+        config.e2e_testing = "patrol"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            assert "integration:" in content
+            assert "flutter test integration_test" in content
+            assert "patrol-test:" in content
+            assert "patrol test -t patrol_test/app_test.dart" in content
+            assert "patrol-doctor:" in content
+
+    def test_create_makefile_omits_patrol_targets_by_default(
+        self, config: Config
+    ) -> None:
+        """Test that Patrol targets are absent for the default e2e framework."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_makefile()
+            content = (config.project_path / "Makefile").read_text()
+            assert "integration:" in content
+            assert "patrol-test:" not in content
+
     def test_check_flutter_version_target_verifies_version(
         self, config: Config
     ) -> None:
@@ -216,6 +246,61 @@ class TestProjectBootstrap:
             # swallows unexpected errors (encoding faults, asset misconfig, etc.)
             assert "isOptional: true" in content
             assert "catch (_)" not in content
+
+    def test_create_patrol_scaffold(self, config: Config) -> None:
+        """Test creating Patrol scaffold files and pubspec entries."""
+        config.e2e_testing = "patrol"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            (config.project_path / "pubspec.yaml").write_text(
+                "name: test_app\ndev_dependencies:\n  flutter_test:\n"
+                "    sdk: flutter\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_e2e_scaffold()
+
+            patrol_test = config.project_path / "patrol_test" / "app_test.dart"
+            assert patrol_test.exists()
+            assert "patrolTest" in patrol_test.read_text()
+
+            pubspec = yaml.safe_load((config.project_path / "pubspec.yaml").read_text())
+            assert pubspec["dev_dependencies"]["patrol"] == "any"
+            assert pubspec["patrol"]["app_name"] == "TestApp"
+            assert pubspec["patrol"]["android"]["package_name"] == "com.test.testapp"
+            assert pubspec["patrol"]["ios"]["bundle_id"] == "com.test.testapp"
+
+            gitignore = (config.project_path / ".gitignore").read_text()
+            assert "**/test_bundle.dart" in gitignore
+            assert ".patrol.env" in gitignore
+
+    def test_patrol_pubspec_updates_are_idempotent(self, config: Config) -> None:
+        """Test Patrol pubspec updates preserve existing explicit values."""
+        config.e2e_testing = "patrol"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            (config.project_path / "pubspec.yaml").write_text(
+                "name: test_app\n"
+                "dev_dependencies:\n"
+                "  patrol: ^3.0.0\n"
+                "patrol:\n"
+                "  app_name: Custom App\n"
+                "  android:\n"
+                "    package_name: com.custom.app\n"
+            )
+            bootstrap = ProjectBootstrap(config)
+            bootstrap._create_e2e_scaffold()
+            bootstrap._create_e2e_scaffold()
+
+            pubspec = yaml.safe_load((config.project_path / "pubspec.yaml").read_text())
+            assert pubspec["dev_dependencies"]["patrol"] == "^3.0.0"
+            assert pubspec["patrol"]["app_name"] == "Custom App"
+            assert pubspec["patrol"]["android"]["package_name"] == "com.custom.app"
+
+            gitignore = (config.project_path / ".gitignore").read_text()
+            assert gitignore.count("**/test_bundle.dart") == 1
+            assert gitignore.count(".patrol.env") == 1
 
     def test_create_analysis_options(self, config: Config) -> None:
         """Test creating analysis options file."""
@@ -1276,6 +1361,7 @@ class TestProjectBootstrap:
         config.architecture = "clean"
         config.database = "sqlite"
         config.testing = "mocktail"
+        config.e2e_testing = "patrol"
         config.auth_provider = "firebase"
         config.cloud_database = "firestore"
         config.notifications_provider = "firebase"
@@ -1308,6 +1394,7 @@ class TestProjectBootstrap:
         assert "drift_dev" in dev_dependencies
         assert "build_runner" in dev_dependencies
         assert "mocktail" in dev_dependencies
+        assert "patrol" in dev_dependencies
 
     def test_dependency_selection_basic_architecture(self, config: Config) -> None:
         """Test that clean-arch packages are absent for basic architecture."""
@@ -1323,6 +1410,7 @@ class TestProjectBootstrap:
         assert "riverpod_generator" not in dev_dependencies
         assert "freezed" not in dev_dependencies
         assert "json_serializable" not in dev_dependencies
+        assert "patrol" not in dev_dependencies
 
     def test_clean_arch_without_sqlite_includes_build_runner(
         self, config: Config
