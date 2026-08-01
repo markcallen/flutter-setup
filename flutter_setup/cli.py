@@ -916,7 +916,9 @@ def append_command(
         if ctx.get_parameter_source(
             "e2e_testing"
         ) != click.core.ParameterSource.COMMANDLINE and file_project.get("e2e_testing"):
-            e2e_testing = cast(E2ETesting, file_project["e2e_testing"])
+            raw = str(file_project["e2e_testing"]).lower()
+            if raw in ("integration_test", "patrol"):
+                e2e_testing = cast(E2ETesting, raw)
 
         target_path = Path(target_dir).resolve()
         is_flutter = detect_flutter_project(target_path)

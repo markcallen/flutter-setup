@@ -1145,7 +1145,9 @@ class FirebaseNotificationsService {
             with open(pubspec_path, "r") as f:
                 pubspec = yaml.safe_load(f) or {}
             dev_deps = pubspec.setdefault("dev_dependencies", {})
-            dev_deps.setdefault("patrol", "any")
+            if "patrol" in dev_deps:
+                return
+            dev_deps["patrol"] = "any"
             with open(pubspec_path, "w") as f:
                 yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
         except Exception as e:
@@ -1161,20 +1163,27 @@ class FirebaseNotificationsService {
         try:
             with open(pubspec_path, "r") as f:
                 pubspec = yaml.safe_load(f) or {}
+            original = yaml.dump(pubspec, default_flow_style=False, sort_keys=False)
             patrol_config = pubspec.setdefault("patrol", {})
             patrol_config.setdefault("app_name", self.config.project_name)
-            package_id = f"{self.config.org}.{self.config.package_name}"
+            # Apple bundle identifiers must not contain underscores.
+            safe_package = self.config.package_name.replace("_", "-")
+            package_id = f"{self.config.org}.{safe_package}"
+            android_id = f"{self.config.org}.{self.config.package_name}"
             if "android" in self.config.platforms:
                 android = patrol_config.setdefault("android", {})
-                android.setdefault("package_name", package_id)
+                android.setdefault("package_name", android_id)
             if "ios" in self.config.platforms:
                 ios = patrol_config.setdefault("ios", {})
                 ios.setdefault("bundle_id", package_id)
             if "macos" in self.config.platforms:
                 macos = patrol_config.setdefault("macos", {})
                 macos.setdefault("bundle_id", package_id)
+            updated = yaml.dump(pubspec, default_flow_style=False, sort_keys=False)
+            if updated == original:
+                return
             with open(pubspec_path, "w") as f:
-                yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+                f.write(updated)
         except Exception as e:
             console.print(f"  ⚠️  Failed to add Patrol config: {e}")
 
