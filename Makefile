@@ -25,7 +25,6 @@ deps:
 	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
 	@echo "Installing Python $(PYTHON_VERSION) via pyenv..."
 	@pyenv install --skip-existing $(PYTHON_VERSION)
-	@pyenv local $(PYTHON_VERSION)
 	@echo "Installing uv for Python $(PYTHON_VERSION)..."
 	@pyenv exec pip install --quiet uv
 	@echo "OK: Python $(PYTHON_VERSION) and uv installed via pyenv"
@@ -33,7 +32,7 @@ deps:
 check-deps:
 	@command -v pyenv > /dev/null 2>&1 || (echo "ERROR: pyenv not found. Install from https://github.com/pyenv/pyenv#installation" && exit 1)
 	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
-	@pyenv version-name 2>/dev/null | grep -q "$(PYTHON_VERSION)" \
+	@pyenv version-name 2>/dev/null | grep -qF "$(PYTHON_VERSION)" \
 		|| (echo "ERROR: pyenv is not set to Python $(PYTHON_VERSION). Run 'make deps' first." && exit 1)
 	@pyenv exec python -c "import sys; sys.exit(0) if sys.version_info >= (3, 12) else sys.exit('Python 3.12+ required, found ' + sys.version)" \
 		|| (echo "ERROR: Python 3.12+ required." && exit 1)
