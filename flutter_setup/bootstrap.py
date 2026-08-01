@@ -249,6 +249,8 @@ generate:{version_dep}
                 "SDKMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/sdkmanager\n"
                 "AVDMANAGER := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin/avdmanager\n"
                 "REQUIRED_NDK := 27.0.12077973\n"
+                "REQUIRED_BUILD_TOOLS := 34.0.0\n"
+                "REQUIRED_CMAKE := 3.22.1\n"
                 "ANDROID_AVD_NAME := flutter_dev\n"
                 "ANDROID_API_LEVEL := 35\n"
                 "ANDROID_AVD_DEVICE := pixel_6\n"
@@ -262,6 +264,18 @@ check-android-sdk:
 \t\t$(SDKMANAGER) "ndk;$(REQUIRED_NDK)"; \\
 \telse \\
 \t\techo "NDK $(REQUIRED_NDK) ok"; \\
+\tfi
+\t@if [ ! -d "$(ANDROID_SDK_ROOT)/build-tools/$(REQUIRED_BUILD_TOOLS)" ]; then \\
+\t\techo "Build-Tools $(REQUIRED_BUILD_TOOLS) missing, installing..."; \\
+\t\t$(SDKMANAGER) "build-tools;$(REQUIRED_BUILD_TOOLS)"; \\
+\telse \\
+\t\techo "Build-Tools $(REQUIRED_BUILD_TOOLS) ok"; \\
+\tfi
+\t@if [ ! -d "$(ANDROID_SDK_ROOT)/cmake/$(REQUIRED_CMAKE)" ]; then \\
+\t\techo "CMake $(REQUIRED_CMAKE) missing, installing..."; \\
+\t\t$(SDKMANAGER) "cmake;$(REQUIRED_CMAKE)"; \\
+\telse \\
+\t\techo "CMake $(REQUIRED_CMAKE) ok"; \\
 \tfi
 
 .PHONY: check-android-sdk
@@ -300,7 +314,7 @@ setup-emulator:
         if "android" in self.config.platforms:
             android_target = (
                 f"run-android:{version_dep}{android_sdk_dep}\n"
-                f"{run_android_emulator_check}\t{flutter_cmd} run -d android\n\n"
+                f"{run_android_emulator_check}\t{flutter_cmd} run -d emulator\n\n"
             )
 
         e2e_targets = self._build_e2e_makefile_targets(version_dep, codegen_dep)
@@ -966,6 +980,10 @@ class FirebaseNotificationsService {
             # flutter pub add failed silently in restricted environments
             if self.config.database == "sqlite":
                 self._add_drift_dev_to_pubspec()
+                # drift_dev >=2.31 requires analyzer >=8.1; flutter_riverpod >=3
+                # pins analyzer <8.0 on Dart 3.8. Both resolve on Dart >=3.9.
+                if self.config.architecture == "clean":
+                    self._ensure_dart_sdk_39_for_drift_riverpod()
 
             console.print("  ✅ Dependencies added")
 
@@ -1189,6 +1207,37 @@ class FirebaseNotificationsService {
                     yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
         except Exception as e:
             console.print(f"  ⚠️  Failed to add drift_dev to pubspec.yaml: {e}")
+
+    def _ensure_dart_sdk_39_for_drift_riverpod(self) -> None:
+        """Bump the Dart SDK constraint to ^3.9.0 when clean+sqlite are both selected.
+
+        drift_dev >=2.31 requires analyzer >=8.1; flutter_riverpod >=3 pulls
+        analyzer <8.0 on Dart 3.8, making pub get fail. Both packages align on
+        analyzer ^9.0.0 starting with Dart 3.9 (released August 2025).
+        """
+        import re
+
+        pubspec_path = self.config.project_path / "pubspec.yaml"
+        if not pubspec_path.exists():
+            return
+        try:
+            with open(pubspec_path, "r") as f:
+                pubspec = yaml.safe_load(f) or {}
+            env = pubspec.setdefault("environment", {})
+            sdk_constraint = str(env.get("sdk", ""))
+            match = re.search(r"(\d+)\.(\d+)", sdk_constraint)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                if (major, minor) < (3, 9):
+                    env["sdk"] = "^3.9.0"
+                    with open(pubspec_path, "w") as f:
+                        yaml.dump(pubspec, f, default_flow_style=False, sort_keys=False)
+                    console.print(
+                        "  ✅ Bumped Dart SDK to ^3.9.0 "
+                        "(drift_dev + flutter_riverpod require Dart >=3.9)"
+                    )
+        except Exception as e:
+            console.print(f"  ⚠️  Failed to update Dart SDK constraint: {e}")
 
     def _create_environment_support(self) -> None:
         """Create environment variable support."""

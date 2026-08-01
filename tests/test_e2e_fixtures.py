@@ -445,7 +445,16 @@ class TestShoppingListCLI:
             mock_cm.return_value.load_config.return_value = self._base_config(parent)
             result = runner.invoke(
                 cli,
-                ["create", "shopping_list", "ios", "android", "--dir", str(parent)],
+                [
+                    "create",
+                    "shopping_list",
+                    "--platforms",
+                    "ios",
+                    "--platforms",
+                    "android",
+                    "--dir",
+                    str(parent),
+                ],
             )
         assert result.exit_code != 0
         assert "shopping_list" in result.output
@@ -460,7 +469,7 @@ class TestShoppingListCLI:
             mock_cm.return_value.load_config.return_value = self._base_config(parent)
             result = runner.invoke(
                 cli,
-                ["create", "shopping_list", "ios", "--dir", str(parent)],
+                ["create", "shopping_list", "--platforms", "ios", "--dir", str(parent)],
             )
         assert "shopping_list" in result.output
 
@@ -533,7 +542,16 @@ class TestShoppingListCLI:
             mock_setup.return_value.run.return_value = None
             result = runner.invoke(
                 cli,
-                ["create", "recipe_app", "ios", "android", "--dir", str(parent)],
+                [
+                    "create",
+                    "recipe_app",
+                    "--platforms",
+                    "ios",
+                    "--platforms",
+                    "android",
+                    "--dir",
+                    str(parent),
+                ],
             )
         assert result.exit_code == 0
         mock_setup.return_value.run.assert_called_once()

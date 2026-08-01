@@ -46,6 +46,49 @@ def _is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def _get_merged_or_prompt(
+    ctx: click.Context,
+    param_name: str,
+    cli_value: Any,
+    config_dict: Dict[str, Any],
+    prompt_text: str,
+    choices: list[str] | None = None,
+    config_key: str | None = None,
+) -> Any:
+    """Use CLI value if explicit, config file value if present and valid, else prompt."""
+    key = config_key or param_name
+    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+        return cli_value
+    if key in config_dict:
+        value = config_dict[key]
+        normalized = value.lower() if isinstance(value, str) else value
+        if choices is None or normalized in choices:
+            return normalized if isinstance(value, str) else value
+    if not _is_interactive():
+        return cli_value
+    if choices:
+        return click.prompt(
+            prompt_text,
+            default=cli_value,
+            type=click.Choice(choices, case_sensitive=False),
+        )
+    return click.prompt(prompt_text, default=cli_value)
+
+
+def _get_merged(
+    ctx: click.Context,
+    param_name: str,
+    cli_value: Any,
+    config_dict: Dict[str, Any],
+    config_key: str | None = None,
+) -> Any:
+    """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
+    key = config_key or param_name
+    if ctx.get_parameter_source(param_name) == click.core.ParameterSource.COMMANDLINE:
+        return cli_value
+    return config_dict.get(key, cli_value)
+
+
 def print_banner() -> None:
     """Print the application banner."""
     banner = """
@@ -71,8 +114,29 @@ def cli(ctx: click.Context) -> None:
     is_flag=True,
     help="Overwrite existing config file if it exists",
 )
-def init_config(force: bool) -> None:
-    """Initialize the configuration file interactively."""
+@click.option(
+    "--flutter-location",
+    default=None,
+    help="Flutter SDK location (skips prompt)",
+)
+@click.option(
+    "--channel",
+    type=click.Choice(["stable", "beta"], case_sensitive=False),
+    default=None,
+    help="Flutter channel (skips prompt)",
+)
+@click.option(
+    "--org",
+    default=None,
+    help="Organization identifier, e.g. com.example (skips prompt)",
+)
+def init_config(
+    force: bool,
+    flutter_location: str | None,
+    channel: str | None,
+    org: str | None,
+) -> None:
+    """Initialize the configuration file interactively or via flags."""
     config_manager = ConfigManager()
     config_manager.ensure_config_dir()
 
@@ -96,67 +160,72 @@ def init_config(force: bool) -> None:
 
     # 1. Flutter Location
     console.print("[bold]1. Flutter SDK Location[/bold]")
-    if existing_config:
-        current_location = existing_config.get("flutter", {}).get("location", "")
-        console.print(f"[dim]Current: {current_location}[/dim]")
+    if flutter_location is not None:
+        resolved_location = Path(flutter_location).expanduser().resolve()
     else:
-        # Try to detect Flutter location
-        detected = config_manager.detect_flutter_location()
-        if detected:
-            console.print(f"[green]✓ Detected Flutter at: {detected}[/green]")
-            current_location = str(detected)
+        if existing_config:
+            current_location = existing_config.get("flutter", {}).get("location", "")
+            console.print(f"[dim]Current: {current_location}[/dim]")
         else:
-            default_location = str(Path.home() / "development" / "flutter")
-            console.print(f"[dim]Default: {default_location}[/dim]")
-            current_location = default_location
+            detected = config_manager.detect_flutter_location()
+            if detected:
+                console.print(f"[green]✓ Detected Flutter at: {detected}[/green]")
+                current_location = str(detected)
+            else:
+                default_location = str(Path.home() / "development" / "flutter")
+                console.print(f"[dim]Default: {default_location}[/dim]")
+                current_location = default_location
 
-    flutter_location_input = click.prompt(
-        "Flutter location",
-        default=current_location,
-        type=str,
-    )
-    flutter_location = Path(flutter_location_input).expanduser().resolve()
+        flutter_location_input = click.prompt(
+            "Flutter location",
+            default=current_location,
+            type=str,
+        )
+        resolved_location = Path(flutter_location_input).expanduser().resolve()
 
-    # Validate Flutter location
-    if not flutter_location.exists():
+    if not resolved_location.exists():
         console.print(
             "[yellow]⚠️  Warning: Path does not exist. It will be created when Flutter is installed.[/yellow]"
         )
 
     # 2. Flutter Channel
     console.print("\n[bold]2. Flutter Channel[/bold]")
-    if existing_config:
-        current_channel = existing_config.get("flutter", {}).get("channel", "stable")
-        console.print(f"[dim]Current: {current_channel}[/dim]")
-    else:
-        current_channel = "stable"
+    if channel is None:
+        if existing_config:
+            current_channel = existing_config.get("flutter", {}).get(
+                "channel", "stable"
+            )
+            console.print(f"[dim]Current: {current_channel}[/dim]")
+        else:
+            current_channel = "stable"
 
-    channel = click.prompt(
-        "Flutter channel",
-        default=current_channel,
-        type=click.Choice(["stable", "beta"], case_sensitive=False),
-    )
+        channel = click.prompt(
+            "Flutter channel",
+            default=current_channel,
+            type=click.Choice(["stable", "beta"], case_sensitive=False),
+        )
 
     # 3. Organization ID
     console.print("\n[bold]3. Organization ID[/bold]")
-    if existing_config:
-        current_org = existing_config.get("project", {}).get("org", "com.example")
-        console.print(f"[dim]Current: {current_org}[/dim]")
-    else:
-        current_org = "com.example"
+    if org is None:
+        if existing_config:
+            current_org = existing_config.get("project", {}).get("org", "com.example")
+            console.print(f"[dim]Current: {current_org}[/dim]")
+        else:
+            current_org = "com.example"
 
-    org = click.prompt(
-        "Organization ID (e.g., com.example, com.mycompany)",
-        default=current_org,
-        type=str,
-    )
+        org = click.prompt(
+            "Organization ID (e.g., com.example, com.mycompany)",
+            default=current_org,
+            type=str,
+        )
 
     # Build the config, preserving any existing project settings not covered by init prompts
     existing_project = existing_config.get("project", {}) if existing_config else {}
     config = {
         "flutter": {
-            "location": str(flutter_location),
-            "channel": channel.lower(),
+            "location": str(resolved_location),
+            "channel": (channel or "stable").lower(),
             "update_mode": (
                 existing_config.get("flutter", {}).get("update_mode", "skip")
                 if existing_config
@@ -290,7 +359,12 @@ def check_command(verbose: bool) -> None:
 
 @cli.command("create")
 @click.argument("project_name", required=False, default=None)
-@click.argument("platforms", nargs=-1)
+@click.option(
+    "--platforms",
+    multiple=True,
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
+    help="Target platforms (repeat for multiple: --platforms ios --platforms android)",
+)
 @click.option(
     "--org",
     default="com.example",
@@ -440,30 +514,15 @@ def create_command(
             choices: list[str] | None = None,
             config_key: str | None = None,
         ) -> Any:
-            """Use CLI value if explicit, config file value if present and valid, else prompt."""
-            key = config_key or param_name
-            if (
-                ctx.get_parameter_source(param_name)
-                == click.core.ParameterSource.COMMANDLINE
-            ):
-                return cli_value
-            if key in config_dict:
-                value = config_dict[key]
-                # Normalize string values to lowercase for case-insensitive matching
-                normalized = value.lower() if isinstance(value, str) else value
-                if choices is None or normalized in choices:
-                    return normalized if isinstance(value, str) else value
-                # Config value is invalid — fall through to prompt
-            if not _is_interactive():
-                # Non-interactive environment: use CLI default silently
-                return cli_value
-            if choices:
-                return click.prompt(
-                    prompt_text,
-                    default=cli_value,
-                    type=click.Choice(choices, case_sensitive=False),
-                )
-            return click.prompt(prompt_text, default=cli_value)
+            return _get_merged_or_prompt(
+                ctx,
+                param_name,
+                cli_value,
+                config_dict,
+                prompt_text,
+                choices,
+                config_key,
+            )
 
         def get_merged(
             param_name: str,
@@ -471,14 +530,7 @@ def create_command(
             config_dict: Dict[str, Any],
             config_key: str | None = None,
         ) -> Any:
-            """Use CLI value if explicit, config file value if present, else CLI default (no prompt)."""
-            key = config_key or param_name
-            if (
-                ctx.get_parameter_source(param_name)
-                == click.core.ParameterSource.COMMANDLINE
-            ):
-                return cli_value
-            return config_dict.get(key, cli_value)
+            return _get_merged(ctx, param_name, cli_value, config_dict, config_key)
 
         # Prompt for required arguments if not provided on the command line
         if project_name is None:
@@ -697,6 +749,13 @@ def create_command(
 @cli.command("append")
 @click.argument("project_name", required=False, default=None)
 @click.option(
+    "--platforms",
+    multiple=True,
+    type=click.Choice(sorted(VALID_PLATFORMS), case_sensitive=False),
+    help="Platforms for a new project (only used when target is not a Flutter project; "
+    "repeat for multiple: --platforms ios --platforms android)",
+)
+@click.option(
     "--dir",
     "target_dir",
     default=".",
@@ -805,6 +864,7 @@ def create_command(
 def append_command(
     ctx: click.Context,
     project_name: str | None,
+    platforms: tuple[str, ...],
     target_dir: str,
     force: bool,
     org: str,
@@ -862,13 +922,15 @@ def append_command(
         is_flutter = detect_flutter_project(target_path)
 
         if is_flutter:
-            platforms = detect_platforms(target_path)
+            detected_platforms = detect_platforms(target_path)
             console.print(f"[dim]Detected Flutter project: {target_path.name}[/dim]")
-            console.print(f"[dim]Detected platforms: {', '.join(platforms)}[/dim]")
+            console.print(
+                f"[dim]Detected platforms: {', '.join(detected_platforms)}[/dim]"
+            )
 
             config = Config(
                 project_name=target_path.name,
-                platforms=platforms,
+                platforms=detected_platforms,
                 org=org,
                 channel=channel,
                 output_dir=target_path.parent,
@@ -905,7 +967,9 @@ def append_command(
                 )
 
             platforms_list: list[str]
-            if not _is_interactive():
+            if platforms:
+                platforms_list = list(platforms)
+            elif not _is_interactive():
                 platforms_list = ["ios", "android", "web"]
             else:
                 console.print(
@@ -923,26 +987,175 @@ def append_command(
                         f"Valid options: {', '.join(sorted(VALID_PLATFORMS))}"
                     )
 
+            merged_org = _get_merged_or_prompt(
+                ctx, "org", org, file_project, "Organization ID (e.g., com.mycompany)"
+            )
+            merged_channel = cast(
+                FlutterChannel,
+                _get_merged_or_prompt(
+                    ctx,
+                    "channel",
+                    channel,
+                    file_flutter,
+                    "Flutter channel",
+                    choices=["stable", "beta"],
+                ),
+            )
+            merged_template = cast(
+                TemplateType,
+                _get_merged_or_prompt(
+                    ctx,
+                    "template",
+                    template,
+                    file_project,
+                    "Project template",
+                    choices=["app", "plugin"],
+                ),
+            )
+            merged_architecture = cast(
+                Architecture,
+                _get_merged_or_prompt(
+                    ctx,
+                    "architecture",
+                    architecture,
+                    file_project,
+                    "Architecture",
+                    choices=["basic", "clean"],
+                ),
+            )
+            merged_database = cast(
+                Database,
+                _get_merged_or_prompt(
+                    ctx,
+                    "database",
+                    database,
+                    file_project,
+                    "Local database",
+                    choices=["none", "sqlite"],
+                ),
+            )
+            merged_testing = cast(
+                Testing,
+                _get_merged_or_prompt(
+                    ctx,
+                    "testing",
+                    testing,
+                    file_project,
+                    "Testing framework",
+                    choices=["standard", "mocktail"],
+                ),
+            )
+            merged_e2e_testing = cast(
+                E2ETesting,
+                _get_merged_or_prompt(
+                    ctx,
+                    "e2e_testing",
+                    e2e_testing,
+                    file_project,
+                    "End-to-end testing framework",
+                    choices=["integration_test", "patrol"],
+                ),
+            )
+            merged_auth_provider = cast(
+                AuthProvider,
+                _get_merged_or_prompt(
+                    ctx,
+                    "auth_provider",
+                    auth_provider,
+                    file_project,
+                    "Auth provider",
+                    choices=["none", "firebase"],
+                ),
+            )
+            merged_cloud_database = cast(
+                CloudDatabase,
+                _get_merged_or_prompt(
+                    ctx,
+                    "cloud_database",
+                    cloud_database,
+                    file_project,
+                    "Cloud database",
+                    choices=["none", "firestore"],
+                ),
+            )
+            merged_notifications_provider = cast(
+                NotificationsProvider,
+                _get_merged_or_prompt(
+                    ctx,
+                    "notifications_provider",
+                    notifications_provider,
+                    file_project,
+                    "Notifications provider",
+                    choices=["none", "firebase"],
+                ),
+            )
+            if merged_template == "plugin":
+                merged_ios_language = cast(
+                    IosLanguage,
+                    _get_merged_or_prompt(
+                        ctx,
+                        "ios_language",
+                        ios_language,
+                        file_project,
+                        "iOS language",
+                        choices=["swift", "objc"],
+                    ),
+                )
+                merged_android_language = cast(
+                    AndroidLanguage,
+                    _get_merged_or_prompt(
+                        ctx,
+                        "android_language",
+                        android_language,
+                        file_project,
+                        "Android language",
+                        choices=["kotlin", "java"],
+                    ),
+                )
+            else:
+                merged_ios_language = cast(
+                    IosLanguage,
+                    _get_merged(ctx, "ios_language", ios_language, file_project),
+                )
+                merged_android_language = cast(
+                    AndroidLanguage,
+                    _get_merged(
+                        ctx, "android_language", android_language, file_project
+                    ),
+                )
+            merged_flutter_update = cast(
+                UpdateMode,
+                _get_merged_or_prompt(
+                    ctx,
+                    "flutter_update",
+                    flutter_update,
+                    file_flutter,
+                    "Flutter update mode",
+                    choices=["reset", "reclone", "skip"],
+                    config_key="update_mode",
+                ),
+            )
+
             config = Config(
                 project_name=project_name,
                 platforms=platforms_list,
-                org=org,
-                channel=channel,
+                org=merged_org,
+                channel=merged_channel,
                 output_dir=target_path,
-                template=template,
-                ios_language=ios_language,
-                android_language=android_language,
-                flutter_update_mode=flutter_update,
+                template=merged_template,
+                ios_language=merged_ios_language,
+                android_language=merged_android_language,
+                flutter_update_mode=merged_flutter_update,
                 dry_run=dry_run,
                 verbose=verbose,
                 flutter_location=flutter_location,
-                architecture=architecture,
-                database=database,
-                testing=testing,
-                e2e_testing=e2e_testing,
-                auth_provider=auth_provider,
-                cloud_database=cloud_database,
-                notifications_provider=notifications_provider,
+                architecture=merged_architecture,
+                database=merged_database,
+                testing=merged_testing,
+                e2e_testing=merged_e2e_testing,
+                auth_provider=merged_auth_provider,
+                cloud_database=merged_cloud_database,
+                notifications_provider=merged_notifications_provider,
                 flutter_version=flutter_version,
             )
 

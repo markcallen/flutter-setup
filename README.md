@@ -59,16 +59,16 @@ You can run `flutter-setup init` again anytime to update your configuration.
 
 ```bash
 # Create a new Flutter app with iOS, Android, and Web support
-flutter-setup create MyAwesomeApp ios android web
+flutter-setup create MyAwesomeApp --platforms ios --platforms android --platforms web
 
 # Create a plugin with specific language preferences
-flutter-setup create MyPlugin --template plugin --ios-language objc --android-language java ios android
+flutter-setup create MyPlugin --template plugin --ios-language objc --android-language java --platforms ios --platforms android
 
 # Use beta channel and custom organization
-flutter-setup create MyApp --channel beta --org com.mycompany ios android macos
+flutter-setup create MyApp --channel beta --org com.mycompany --platforms ios --platforms android --platforms macos
 
 # Preview what would happen (dry run)
-flutter-setup create MyApp --dry-run ios android
+flutter-setup create MyApp --dry-run --platforms ios --platforms android
 ```
 
 ## Commands
@@ -77,8 +77,9 @@ flutter-setup create MyApp --dry-run ios android
 Initialize or update your configuration file:
 
 ```bash
-flutter-setup init              # Create or update config interactively
-flutter-setup init --force      # Overwrite existing config
+flutter-setup init                                                  # Interactive
+flutter-setup init --flutter-location ~/dev/flutter --channel stable --org com.example  # Via flags
+flutter-setup init --force                                          # Overwrite existing config
 ```
 
 The config file is stored at `~/.config/flutter-setup/config.yaml` (or `$XDG_CONFIG_HOME/flutter-setup/config.yaml`).
@@ -87,7 +88,7 @@ The config file is stored at `~/.config/flutter-setup/config.yaml` (or `$XDG_CON
 Create a new Flutter project. Errors if the target directory already exists — use `append` instead:
 
 ```bash
-flutter-setup create MyApp ios android web
+flutter-setup create MyApp --platforms ios --platforms android --platforms web
 ```
 
 ### `append` - Add Tooling to Existing Project
