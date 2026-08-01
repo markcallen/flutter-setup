@@ -1,8 +1,9 @@
-.PHONY: help setup check-deps install dev test lint type-check format check-all clean smoke-build-fast smoke-build-full smoke-test-fast smoke-test-full
+.PHONY: help deps setup check-deps install dev test lint type-check format check-all clean smoke-build-fast smoke-build-full smoke-test-fast smoke-test-full
 
 help:
 	@echo "Available commands:"
-	@echo "  setup              - Set up the full dev environment (run this first)"
+	@echo "  deps               - Install Python via pyenv and uv (run once per machine)"
+	@echo "  setup              - Set up the full dev environment (run after deps)"
 	@echo "  check-deps         - Check that required tools are installed"
 	@echo "  install            - Install package (production)"
 	@echo "  dev                - Install package in development mode"
@@ -17,37 +18,52 @@ help:
 	@echo "  smoke-test-full    - Run full E2E smoke test (clean environment)"
 	@echo "  clean              - Remove build artifacts and caches"
 
-check-deps:
-	@command -v uv > /dev/null 2>&1 || (echo "ERROR: uv not found. Install from https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
+PYTHON_VERSION := $(shell cat .python-version 2>/dev/null || echo "3.12")
+
+deps:
+	@command -v pyenv > /dev/null 2>&1 || (echo "ERROR: pyenv not found. Install from https://github.com/pyenv/pyenv#installation" && exit 1)
 	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
-	@python3 -c "import sys; sys.exit(0) if sys.version_info >= (3, 12) else sys.exit('Python 3.12+ required, found ' + sys.version)" \
+	@echo "Installing Python $(PYTHON_VERSION) via pyenv..."
+	@pyenv install --skip-existing $(PYTHON_VERSION)
+	@echo "Installing uv for Python $(PYTHON_VERSION)..."
+	@pyenv exec pip install --quiet uv
+	@echo "OK: Python $(PYTHON_VERSION) and uv installed via pyenv"
+
+check-deps:
+	@command -v pyenv > /dev/null 2>&1 || (echo "ERROR: pyenv not found. Install from https://github.com/pyenv/pyenv#installation" && exit 1)
+	@command -v git > /dev/null 2>&1 || (echo "ERROR: git not found. Install git and try again." && exit 1)
+	@pyenv version-name 2>/dev/null | grep -qF "$(PYTHON_VERSION)" \
+		|| (echo "ERROR: pyenv is not set to Python $(PYTHON_VERSION). Run 'make deps' first." && exit 1)
+	@pyenv exec python -c "import sys; sys.exit(0) if sys.version_info >= (3, 12) else sys.exit('Python 3.12+ required, found ' + sys.version)" \
 		|| (echo "ERROR: Python 3.12+ required." && exit 1)
-	@echo "OK: uv, git, and Python 3.12+ all present"
+	@pyenv exec python -m uv --version > /dev/null 2>&1 \
+		|| (echo "ERROR: uv not found. Run 'make deps' first." && exit 1)
+	@echo "OK: pyenv, Python $(PYTHON_VERSION), uv, and git all present"
 
 setup: check-deps
-	uv sync
-	uv pip install -e ".[dev]"
-	uv run pre-commit install
+	pyenv exec python -m uv sync
+	pyenv exec python -m uv pip install -e ".[dev]"
+	pyenv exec python -m uv run pre-commit install
 	@echo ""
 	@echo "Dev environment ready. Try 'make test' to verify."
 
 install:
-	uv pip install .
+	pyenv exec python -m uv pip install .
 
 dev:
-	uv pip install -e ".[dev]"
+	pyenv exec python -m uv pip install -e ".[dev]"
 
 test:
-	uv run pytest
+	pyenv exec python -m uv run pytest
 
 lint:
-	uv run ruff check .
+	pyenv exec python -m uv run ruff check .
 
 type-check:
-	uv run mypy .
+	pyenv exec python -m uv run mypy .
 
 format:
-	uv run black .
+	pyenv exec python -m uv run black .
 
 check-all: lint type-check test
 
