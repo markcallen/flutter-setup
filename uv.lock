@@ -249,7 +249,7 @@ wheels = [
 
 [[package]]
 name = "flutter-setup"
-version = "2.1.1"
+version = "2.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

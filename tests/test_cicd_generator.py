@@ -452,8 +452,8 @@ class TestCicdGenerator:
                 assert "build_runner" in content, wf
                 assert "Generate code" in content, wf
 
-    def test_lint_workflow_has_pr_write_permission(self, config: Config) -> None:
-        """Test that lint workflow grants pull-requests: write so it can post PR comments."""
+    def test_lint_workflow_has_issue_write_permission(self, config: Config) -> None:
+        """Test that lint workflow grants issues: write so it can post PR comments."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
@@ -464,10 +464,10 @@ class TestCicdGenerator:
             content = (workflows_dir / "lint.yml").read_text()
             assert "permissions:" in content
             assert "contents: read" in content
-            assert "pull-requests: write" in content
+            assert "issues: write" in content
 
-    def test_format_workflow_has_pr_write_permission(self, config: Config) -> None:
-        """Test that format workflow grants pull-requests: write so it can post PR comments."""
+    def test_format_workflow_has_issue_write_permission(self, config: Config) -> None:
+        """Test that format workflow grants issues: write so it can post PR comments."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config.output_dir = Path(tmpdir)
             config.project_path.mkdir(parents=True, exist_ok=True)
@@ -478,7 +478,7 @@ class TestCicdGenerator:
             content = (workflows_dir / "format.yml").read_text()
             assert "permissions:" in content
             assert "contents: read" in content
-            assert "pull-requests: write" in content
+            assert "issues: write" in content
 
     def test_git_hooks_generated(self, config: Config) -> None:
         """Test that pre-commit and pre-push hooks are created in .git-hooks/."""

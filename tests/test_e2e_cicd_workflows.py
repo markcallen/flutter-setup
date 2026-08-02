@@ -2,7 +2,7 @@
 
 These tests drive CicdGenerator directly, parse the produced YAML files, and
 assert the properties that matter for a CI run to succeed on GitHub Actions:
-- jobs that post PR comments carry `permissions: pull-requests: write`
+- jobs that post PR comments carry `permissions: issues: write`
 - `build_runner` never runs in the lint workflow (it fails when source_gen is
   incompatible with the Flutter-bundled analyzer, as seen in practice)
 - `build_runner` still runs in test/build workflows for sqlite projects
@@ -12,6 +12,7 @@ assert the properties that matter for a CI run to succeed on GitHub Actions:
 
 from pathlib import Path
 from typing import Any, Literal
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -49,8 +50,11 @@ def _generate_workflows(config: Config, tmp_path: Path) -> dict[str, dict[str, A
     """Generate all workflows and return parsed YAML keyed by filename."""
     config.output_dir = tmp_path
     config.project_path.mkdir(parents=True, exist_ok=True)
-    generator = CicdGenerator(config)
-    generator.generate_cicd()
+    with patch.object(
+        CicdGenerator, "_get_current_flutter_version", return_value="3.24.0"
+    ):
+        generator = CicdGenerator(config)
+        generator.generate_cicd()
     workflows_dir = config.project_path / ".github" / "workflows"
     return {
         wf.name: yaml.safe_load(wf.read_text())
@@ -64,14 +68,14 @@ def _generate_workflows(config: Config, tmp_path: Path) -> dict[str, dict[str, A
 
 
 class TestWorkflowPermissions:
-    """Jobs that post PR comments must carry pull-requests: write."""
+    """Jobs that post PR comments must carry issues: write."""
 
     def test_lint_job_has_required_permissions(self, tmp_path: Path) -> None:
         workflows = _generate_workflows(_make_config(), tmp_path)
         perms = workflows["lint.yml"]["jobs"]["lint"].get("permissions", {})
         assert (
-            perms.get("pull-requests") == "write"
-        ), "lint job must grant pull-requests: write so PR comment step works"
+            perms.get("issues") == "write"
+        ), "lint job must grant issues: write so PR comment step works"
         assert perms.get("contents") == "read", (
             "lint job must grant contents: read — setting any job permission "
             "drops all others to none, which breaks actions/checkout"
@@ -81,8 +85,8 @@ class TestWorkflowPermissions:
         workflows = _generate_workflows(_make_config(), tmp_path)
         perms = workflows["format.yml"]["jobs"]["format"].get("permissions", {})
         assert (
-            perms.get("pull-requests") == "write"
-        ), "format job must grant pull-requests: write so PR comment step works"
+            perms.get("issues") == "write"
+        ), "format job must grant issues: write so PR comment step works"
         assert (
             perms.get("contents") == "read"
         ), "format job must grant contents: read so actions/checkout can clone"
@@ -93,8 +97,8 @@ class TestWorkflowPermissions:
             job_key = wf_name.replace(".yml", "")
             perms = workflows[wf_name]["jobs"][job_key].get("permissions", {})
             assert (
-                perms.get("pull-requests") == "write"
-            ), f"{wf_name} sqlite project must still have pull-requests: write"
+                perms.get("issues") == "write"
+            ), f"{wf_name} sqlite project must still have issues: write"
             assert (
                 perms.get("contents") == "read"
             ), f"{wf_name} sqlite project must still have contents: read"
@@ -169,7 +173,10 @@ class TestWorkflowStructure:
         config = _make_config(platforms=["android"])
         config.output_dir = tmp_path
         config.project_path.mkdir(parents=True, exist_ok=True)
-        CicdGenerator(config).generate_cicd()
+        with patch.object(
+            CicdGenerator, "_get_current_flutter_version", return_value="3.24.0"
+        ):
+            CicdGenerator(config).generate_cicd()
         workflows_dir = config.project_path / ".github" / "workflows"
         for wf in workflows_dir.glob("*.yml"):
             parsed: dict[str, Any] = yaml.safe_load(wf.read_text())
