@@ -480,6 +480,25 @@ class TestCicdGenerator:
             assert "contents: read" in content
             assert "pull-requests: write" in content
 
+    def test_git_hooks_generated(self, config: Config) -> None:
+        """Test that pre-commit and pre-push hooks are created in .git-hooks/."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+
+            hooks_dir = config.project_path / ".git-hooks"
+            pre_commit = hooks_dir / "pre-commit"
+            pre_push = hooks_dir / "pre-push"
+
+            assert pre_commit.exists(), ".git-hooks/pre-commit must be created"
+            assert pre_push.exists(), ".git-hooks/pre-push must be created"
+            assert pre_commit.stat().st_mode & 0o111, "pre-commit must be executable"
+            assert pre_push.stat().st_mode & 0o111, "pre-push must be executable"
+            assert "dart format" in pre_commit.read_text()
+            assert "flutter analyze" in pre_push.read_text()
+
     def test_build_artifacts_fail_when_missing(self, config: Config) -> None:
         """Test that build artifact uploads use if-no-files-found: error."""
         with tempfile.TemporaryDirectory() as tmpdir:
