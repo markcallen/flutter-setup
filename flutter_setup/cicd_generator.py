@@ -112,6 +112,9 @@ class CicdGenerator:
         # Generate setup documentation
         self._generate_setup_docs(github_dir)
 
+        # Generate git hooks for local quality gates
+        self._generate_git_hooks()
+
         console.print("  ✅ CI/CD workflows and configuration generated")
 
     def _generate_lint_workflow(self, workflows_dir: Path) -> None:
@@ -132,6 +135,9 @@ jobs:
   lint:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,7 +156,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-{self._codegen_step()}
+
       - name: Analyze
         run: flutter analyze
 
@@ -188,6 +194,9 @@ jobs:
   format:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -820,3 +829,56 @@ All build workflows can be triggered manually via **Actions → [Workflow Name] 
                 "- Can be packaged as MSIX or installer"
             )
         return "\n\n".join(notes) if notes else "No platform-specific notes."
+
+    def _generate_git_hooks(self) -> None:
+        """Generate .git-hooks/ scripts that mirror the CI quality gates locally."""
+        hooks_dir = self.project_path / ".git-hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        pre_commit = hooks_dir / "pre-commit"
+        if not pre_commit.exists() or self.force:
+            pre_commit.write_text(
+                "#!/usr/bin/env bash\n"
+                "# pre-commit: run dart format to catch style issues before CI.\n"
+                "set -euo pipefail\n"
+                "\n"
+                'FLUTTER_BIN="${FLUTTER_ROOT:-}/bin"\n'
+                'DART="${FLUTTER_BIN}/dart"\n'
+                '[ -x "$DART" ] || DART="$(command -v dart 2>/dev/null)" || '
+                '{ echo "dart not found"; exit 1; }\n'
+                "\n"
+                'echo "pre-commit: dart format --set-exit-if-changed ."\n'
+                '"$DART" format --set-exit-if-changed . || {\n'
+                '  echo ""\n'
+                '  echo "Formatting errors found. Run:  dart format ."\n'
+                '  echo "then re-stage the changed files and commit again."\n'
+                "  exit 1\n"
+                "}\n"
+            )
+            pre_commit.chmod(0o755)
+
+        pre_push = hooks_dir / "pre-push"
+        if not pre_push.exists() or self.force:
+            pre_push.write_text(
+                "#!/usr/bin/env bash\n"
+                "# pre-push: run flutter analyze before pushing to catch lint issues.\n"
+                "set -euo pipefail\n"
+                "\n"
+                'FLUTTER_BIN="${FLUTTER_ROOT:-}/bin"\n'
+                'FLUTTER="${FLUTTER_BIN}/flutter"\n'
+                '[ -x "$FLUTTER" ] || FLUTTER="$(command -v flutter 2>/dev/null)" || '
+                '{ echo "flutter not found"; exit 1; }\n'
+                "\n"
+                'echo "pre-push: flutter analyze"\n'
+                '"$FLUTTER" analyze || {\n'
+                '  echo ""\n'
+                '  echo "flutter analyze reported issues. Fix them before pushing."\n'
+                "  exit 1\n"
+                "}\n"
+            )
+            pre_push.chmod(0o755)
+
+        console.print(
+            "  ✅ Git hooks created in .git-hooks/ — "
+            "run `git config core.hooksPath .git-hooks` to activate"
+        )

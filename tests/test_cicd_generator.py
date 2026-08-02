@@ -368,8 +368,8 @@ class TestCicdGenerator:
                 content = wf.read_text()
                 assert "build_runner" not in content, wf.name
 
-    def test_codegen_step_present_in_lint_workflow_for_sqlite(self) -> None:
-        """Test that code generation step is added to lint workflow for sqlite projects."""
+    def test_codegen_step_absent_in_lint_workflow_for_sqlite(self) -> None:
+        """Test that lint workflow never includes build_runner (analyze doesn't need generated code)."""
         config = Config(
             project_name="TestApp",
             platforms=["android"],
@@ -393,8 +393,7 @@ class TestCicdGenerator:
             workflows_dir.mkdir(parents=True, exist_ok=True)
             generator._generate_lint_workflow(workflows_dir)
             content = (workflows_dir / "lint.yml").read_text()
-            assert "build_runner" in content
-            assert "Generate code" in content
+            assert "build_runner" not in content
 
     def test_codegen_step_present_in_test_workflow_for_sqlite(self) -> None:
         """Test that code generation step is added to test workflow for sqlite projects."""
@@ -452,6 +451,53 @@ class TestCicdGenerator:
                 content = (workflows_dir / wf).read_text()
                 assert "build_runner" in content, wf
                 assert "Generate code" in content, wf
+
+    def test_lint_workflow_has_issue_write_permission(self, config: Config) -> None:
+        """Test that lint workflow grants issues: write so it can post PR comments."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_lint_workflow(workflows_dir)
+            content = (workflows_dir / "lint.yml").read_text()
+            assert "permissions:" in content
+            assert "contents: read" in content
+            assert "issues: write" in content
+
+    def test_format_workflow_has_issue_write_permission(self, config: Config) -> None:
+        """Test that format workflow grants issues: write so it can post PR comments."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            workflows_dir = config.project_path / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            generator._generate_format_workflow(workflows_dir)
+            content = (workflows_dir / "format.yml").read_text()
+            assert "permissions:" in content
+            assert "contents: read" in content
+            assert "issues: write" in content
+
+    def test_git_hooks_generated(self, config: Config) -> None:
+        """Test that pre-commit and pre-push hooks are created in .git-hooks/."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = Path(tmpdir)
+            config.project_path.mkdir(parents=True, exist_ok=True)
+            generator = CicdGenerator(config)
+            generator.generate_cicd()
+
+            hooks_dir = config.project_path / ".git-hooks"
+            pre_commit = hooks_dir / "pre-commit"
+            pre_push = hooks_dir / "pre-push"
+
+            assert pre_commit.exists(), ".git-hooks/pre-commit must be created"
+            assert pre_push.exists(), ".git-hooks/pre-push must be created"
+            assert pre_commit.stat().st_mode & 0o111, "pre-commit must be executable"
+            assert pre_push.stat().st_mode & 0o111, "pre-push must be executable"
+            assert "dart format" in pre_commit.read_text()
+            assert "flutter analyze" in pre_push.read_text()
 
     def test_build_artifacts_fail_when_missing(self, config: Config) -> None:
         """Test that build artifact uploads use if-no-files-found: error."""
